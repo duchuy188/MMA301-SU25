@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, User, Mail, Lock, Phone, Eye, EyeOff } from 'lucide-react-native';
+import useAuth from '../hooks/useAuth';
 
 export default function RegisterScreen() {
   const [formData, setFormData] = useState({
@@ -22,6 +23,9 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sử dụng hook useAuth để quản lý đăng ký
+  const { register } = useAuth();
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -45,9 +49,17 @@ export default function RegisterScreen() {
 
     setIsLoading(true);
     
-    // Simulate register API call
-    setTimeout(() => {
-      setIsLoading(false);
+    // Gọi hàm register từ hook useAuth
+    const success = await register({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      password: formData.password
+    });
+
+    setIsLoading(false);
+
+    if (success) {
       Alert.alert(
         'Đăng ký thành công!',
         'Tài khoản của bạn đã được tạo thành công. Hãy đăng nhập để tiếp tục.',
@@ -58,7 +70,7 @@ export default function RegisterScreen() {
           },
         ]
       );
-    }, 1500);
+    }
   };
 
   return (
@@ -319,3 +331,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+

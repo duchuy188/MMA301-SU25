@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Search, Ticket, User } from 'lucide-react-native';
+import { Bus, Search, Ticket, User } from 'lucide-react-native';
 
 export default function TabLayout() {
   return (
@@ -26,7 +26,7 @@ export default function TabLayout() {
         options={{
           title: 'Trang chủ',
           tabBarIcon: ({ size, color }) => (
-            <Home size={size} color={color} />
+            <Bus size={size} color={color} />
           ),
         }}
       />
@@ -60,3 +60,4 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+

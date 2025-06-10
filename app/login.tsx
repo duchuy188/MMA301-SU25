@@ -7,15 +7,20 @@ import {
   TouchableOpacity,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
+import { useAuth } from '../hooks/useAuth';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Sử dụng hook useAuth để quản lý đăng nhập
+  const { login } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -25,9 +30,12 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     
-    // Simulate login API call
-    setTimeout(() => {
-      setIsLoading(false);
+    // Gọi hàm login từ hook useAuth
+    const success = await login(email, password);
+
+    setIsLoading(false);
+
+    if (success) {
       Alert.alert(
         'Đăng nhập thành công!',
         'Chào mừng bạn trở lại',
@@ -38,7 +46,12 @@ export default function LoginScreen() {
           },
         ]
       );
-    }, 1500);
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    Alert.alert('Thông báo', 'Đang kết nối với Google...');
+    // Implement Google OAuth logic here
   };
 
   return (
@@ -53,6 +66,15 @@ export default function LoginScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Bus Image */}
+        <View style={styles.busImageContainer}>
+          <Image
+            source={{ uri: 'https://cdn-icons-png.flaticon.com/512/416/416597.png' }}
+            style={styles.busImage}
+            resizeMode="contain"
+          />
+        </View>
+
         {/* Welcome */}
         <View style={styles.welcome}>
           <Text style={styles.welcomeTitle}>Chào mừng trở lại!</Text>
@@ -102,7 +124,10 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.forgotPassword}>
+          <TouchableOpacity
+            style={styles.forgotPassword}
+            onPress={() => router.push('/forgot-password')}
+          >
             <Text style={styles.forgotPasswordText}>Quên mật khẩu?</Text>
           </TouchableOpacity>
 
@@ -115,33 +140,39 @@ export default function LoginScreen() {
               {isLoading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </Text>
           </TouchableOpacity>
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>hoặc</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Social Login */}
+          <View style={styles.socialSection}>
+            <TouchableOpacity
+              style={styles.socialButton}
+              onPress={handleGoogleLogin}
+            >
+              <Image
+                source={{ uri: 'https://cdn-icons-png.flaticon.com/512/2991/2991148.png' }}
+                style={{ width: 20, height: 20, marginRight: 8 }}
+              />
+              <Text style={styles.socialButtonText}>Đăng nhập bằng Google</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Register Link */}
+          <View style={styles.registerSection}>
+            <Text style={styles.registerText}>Chưa có tài khoản? </Text>
+            <TouchableOpacity onPress={() => router.push('/register')}>
+              <Text style={styles.registerLink}>Đăng ký ngay</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Divider */}
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>hoặc</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        {/* Social Login */}
-        <View style={styles.socialSection}>
-          <TouchableOpacity style={styles.socialButton}>
-            <Text style={styles.socialButtonText}>Đăng nhập với Google</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.socialButton}>
-            <Text style={styles.socialButtonText}>Đăng nhập với Facebook</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Register Link */}
-        <View style={styles.registerSection}>
-          <Text style={styles.registerText}>Chưa có tài khoản? </Text>
-          <TouchableOpacity onPress={() => router.push('/register')}>
-            <Text style={styles.registerLink}>Đăng ký ngay</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Footer space */}
+        <View style={{ height: 30 }} />
       </ScrollView>
     </View>
   );
@@ -169,6 +200,14 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  busImageContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  busImage: {
+    width: 100,
+    height: 100,
   },
   welcome: {
     alignItems: 'center',
@@ -241,48 +280,48 @@ const styles = StyleSheet.create({
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 30,
+    marginVertical: 20,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#D1D5DB',
   },
   dividerText: {
+    marginHorizontal: 12,
     fontSize: 14,
     color: '#6B7280',
-    marginHorizontal: 16,
   },
   socialSection: {
-    marginBottom: 30,
+    alignItems: 'center',
   },
   socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#D1D5DB',
-    paddingVertical: 16,
     borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
   socialButtonText: {
     fontSize: 16,
-    color: '#374151',
-    fontWeight: '500',
+    color: '#1F2937',
   },
   registerSection: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: 40,
+    marginTop: 20,
   },
   registerText: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#6B7280',
   },
   registerLink: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#2563EB',
-    fontWeight: '600',
+    fontWeight: '500',
   },
 });
+

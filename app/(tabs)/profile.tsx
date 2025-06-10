@@ -6,9 +6,11 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator
 } from 'react-native';
 import { router } from 'expo-router';
 import { User, Phone, Mail, CreditCard, Bell, CircleHelp as HelpCircle, Settings, LogOut, ChevronRight } from 'lucide-react-native';
+import { useAuth } from '../../hooks/useAuth';
 
 const menuItems = [
   {
@@ -44,12 +46,8 @@ const menuItems = [
 ];
 
 export default function ProfileScreen() {
-  const isLoggedIn = true; // This would come from your auth state
-  const user = {
-    name: 'Nguyễn Văn A',
-    phone: '0987654321',
-    email: 'nguyenvana@email.com',
-  };
+  // Sử dụng hook useAuth để lấy trạng thái đăng nhập và thông tin người dùng
+  const { isLoggedIn, user, isLoading, logout } = useAuth();
 
   const handleMenuPress = (action: string) => {
     switch (action) {
@@ -84,7 +82,7 @@ export default function ProfileScreen() {
           text: 'Đăng xuất',
           style: 'destructive',
           onPress: () => {
-            // Handle logout logic here
+            logout();
             Alert.alert('Thành công', 'Đã đăng xuất thành công');
           },
         },
@@ -95,6 +93,14 @@ export default function ProfileScreen() {
   const handleLogin = () => {
     router.push('/login');
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#2563EB" />
+      </View>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
@@ -357,3 +363,4 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
 });
+
