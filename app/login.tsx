@@ -12,15 +12,19 @@ import {
 import { router } from 'expo-router';
 import { ArrowLeft, Mail, Lock, Eye, EyeOff } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TOKEN_KEY, USER_KEY } from '../services/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
 
-  // Sử dụng hook useAuth để quản lý đăng nhập
-  const { login } = useAuth();
+
+  const { login, refreshAuthStatus } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -30,7 +34,7 @@ export default function LoginScreen() {
 
     setIsLoading(true);
     
-    // Gọi hàm login từ hook useAuth
+
     const success = await login(email, password);
 
     setIsLoading(false);
@@ -42,7 +46,10 @@ export default function LoginScreen() {
         [
           {
             text: 'OK',
-            onPress: () => router.replace('/(tabs)'),
+            onPress: () => {
+              router.replace('/(tabs)');
+              refreshAuthStatus(); 
+            },
           },
         ]
       );
@@ -51,14 +58,38 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = () => {
     Alert.alert('Thông báo', 'Đang kết nối với Google...');
-    // Implement Google OAuth logic here
+  
+  };
+
+  const checkLoginStatus = async () => {
+    try {
+      setIsLoading(true);
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      const storedUser = await AsyncStorage.getItem(USER_KEY);
+
+      if (token && storedUser) {
+        setIsLoggedIn(true);
+        setUser(JSON.parse(storedUser));
+      } else {
+        setIsLoggedIn(false);
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error checking login status:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBack = () => {
+    router.push('/(tabs)');
   };
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={handleBack}>
           <ArrowLeft size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Đăng nhập</Text>

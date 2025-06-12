@@ -11,10 +11,11 @@ import {
 import { router } from 'expo-router';
 import { ArrowLeft, User, Mail, Lock, Phone, Eye, EyeOff } from 'lucide-react-native';
 import useAuth from '../hooks/useAuth';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 
 export default function RegisterScreen() {
   const [formData, setFormData] = useState({
-    name: '',
+    fullName: '',
     email: '',
     phone: '',
     password: '',
@@ -32,7 +33,7 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    if (!formData.name || !formData.email || !formData.phone || !formData.password) {
+    if (!formData.fullName || !formData.email || !formData.phone || !formData.password) {
       Alert.alert('Thông báo', 'Vui lòng điền đầy đủ thông tin');
       return;
     }
@@ -51,7 +52,7 @@ export default function RegisterScreen() {
     
     // Gọi hàm register từ hook useAuth
     const success = await register({
-      name: formData.name,
+      fullName: formData.fullName,
       email: formData.email,
       phone: formData.phone,
       password: formData.password
@@ -102,8 +103,8 @@ export default function RegisterScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Nhập họ và tên"
-                value={formData.name}
-                onChangeText={(text) => handleInputChange('name', text)}
+                value={formData.fullName}
+                onChangeText={(text) => handleInputChange('fullName', text)}
                 autoCapitalize="words"
               />
             </View>
@@ -160,6 +161,9 @@ export default function RegisterScreen() {
                 )}
               </TouchableOpacity>
             </View>
+            {formData.password.length > 0 && (
+              <PasswordStrengthMeter password={formData.password} />
+            )}
           </View>
 
           <View style={styles.inputContainer}>

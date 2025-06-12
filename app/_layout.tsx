@@ -2,7 +2,6 @@ import React from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import FloatingChatButton from '../components/FloatingChatButton';
 
 export default function RootLayout() {
   return (
@@ -21,8 +20,6 @@ export default function RootLayout() {
         <Stack.Screen name="seat-selection" options={{ headerShown: false }} />
         <Stack.Screen name="chatbot" options={{ headerShown: false }} />
       </Stack>
-
-      <FloatingChatButton />
     </SafeAreaProvider>
   );
 }

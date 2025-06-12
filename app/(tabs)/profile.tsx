@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { router } from 'expo-router';
 import { User, Phone, Mail, CreditCard, Bell, CircleHelp as HelpCircle, Settings, LogOut, ChevronRight } from 'lucide-react-native';
 import { useAuth } from '../../hooks/useAuth';
+import { useNavigation } from '@react-navigation/native';
 
 const menuItems = [
   {
@@ -47,7 +48,8 @@ const menuItems = [
 
 export default function ProfileScreen() {
   // Sử dụng hook useAuth để lấy trạng thái đăng nhập và thông tin người dùng
-  const { isLoggedIn, user, isLoading, logout } = useAuth();
+  const { isLoggedIn, user, isLoading, logout, refreshAuthStatus } = useAuth();
+  const navigation = useNavigation();
 
   const handleMenuPress = (action: string) => {
     switch (action) {
@@ -93,6 +95,14 @@ export default function ProfileScreen() {
   const handleLogin = () => {
     router.push('/login');
   };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      refreshAuthStatus(); // Gọi hàm refresh từ useAuth
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   if (isLoading) {
     return (
@@ -146,14 +156,14 @@ export default function ProfileScreen() {
           </View>
           
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user.name}</Text>
+            <Text style={styles.userName}>{user?.name}</Text>
             <View style={styles.contactInfo}>
               <Phone size={14} color="#6B7280" />
-              <Text style={styles.contactText}>{user.phone}</Text>
+              <Text style={styles.contactText}>{user?.phone}</Text>
             </View>
             <View style={styles.contactInfo}>
               <Mail size={14} color="#6B7280" />
-              <Text style={styles.contactText}>{user.email}</Text>
+              <Text style={styles.contactText}>{user?.email}</Text>
             </View>
           </View>
         </View>

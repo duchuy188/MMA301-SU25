@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 import { router } from 'expo-router';
 import { ArrowLeft, Mail, Send, Lock, Eye, EyeOff, CheckCircle2 } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
+import PasswordStrengthMeter, { calculatePasswordStrength } from '../components/PasswordStrengthMeter';
 
 // Các bước trong quy trình quên mật khẩu
 enum ForgotPasswordStep {
@@ -31,22 +32,28 @@ export default function ForgotPasswordScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [countdown, setCountdown] = useState<number>(0);
 
-  // Sử dụng hook useAuth để truy cập hàm resetPassword
-  const { resetPassword } = useAuth();
 
-  // Code mẫu để xác thực (trong môi trường thật sẽ được tạo ngẫu nhiên và gửi qua email)
-  const mockVerificationCode = "123456";
+  const { resetPassword, forgotPassword, resendOtp } = useAuth();
 
-  // Xử lý gửi yêu cầu đặt lại mật khẩu
-  const handleSendVerificationCode = () => {
-    // Kiểm tra email đã nhập chưa
+
+  useEffect(() => {
+    if (countdown > 0) {
+      const timer = setInterval(() => {
+        setCountdown((prev) => prev - 1);
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [countdown]);
+
+
+  const handleSendVerificationCode = async () => {
     if (!email) {
       Alert.alert('Thông báo', 'Vui lòng nhập địa chỉ email của bạn');
       return;
     }
 
-    // Kiểm tra định dạng email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Alert.alert('Thông báo', 'Vui lòng nhập địa chỉ email hợp lệ');
@@ -54,43 +61,32 @@ export default function ForgotPasswordScreen() {
     }
 
     setIsLoading(true);
-
-    // Giả lập gửi mã xác nhận
-    setTimeout(() => {
+    try {
+      const success = await forgotPassword(email);
+      if (success) {
+        setCountdown(60); 
+        setCurrentStep(ForgotPasswordStep.VERIFICATION_CODE);
+      }
+    } catch (error) {
+      Alert.alert('Thông báo', 'Không thể gửi mã xác nhận. Vui lòng thử lại sau.');
+    } finally {
       setIsLoading(false);
-      Alert.alert(
-        'Đã gửi mã xác nhận',
-        `Mã xác nhận đã được gửi đến email ${email}. Vui lòng kiểm tra hộp thư và nhập mã để tiếp tục.`,
-        [{ text: 'OK' }]
-      );
-      // Trong bản demo này, chúng ta sẽ tiết lộ mã để dễ sử dụng
-      Alert.alert('Demo', `(Demo) Mã xác nhận là: ${mockVerificationCode}`);
-      setCurrentStep(ForgotPasswordStep.VERIFICATION_CODE);
-    }, 1500);
+    }
   };
 
-  // Xử lý xác thực mã
-  const handleVerifyCode = () => {
+
+  const handleVerifyCode = async () => {
     if (!verificationCode) {
       Alert.alert('Thông báo', 'Vui lòng nhập mã xác nhận');
       return;
     }
 
-    setIsLoading(true);
 
-    // Kiểm tra mã xác nhận có đúng không
-    setTimeout(() => {
-      setIsLoading(false);
-
-      if (verificationCode === mockVerificationCode) {
-        setCurrentStep(ForgotPasswordStep.NEW_PASSWORD);
-      } else {
-        Alert.alert('Thông báo', 'Mã xác nhận không đúng. Vui lòng thử lại.');
-      }
-    }, 1000);
+  
+    setCurrentStep(ForgotPasswordStep.NEW_PASSWORD);
   };
 
-  // Xử lý đặt mật khẩu mới
+
   const handleResetPassword = async () => {
     if (!newPassword || !confirmPassword) {
       Alert.alert('Thông báo', 'Vui lòng nhập đầy đủ thông tin');
@@ -107,12 +103,16 @@ export default function ForgotPasswordScreen() {
       return;
     }
 
+    // Kiểm tra độ mạnh mật khẩu
+    const passwordStrength = calculatePasswordStrength(newPassword);
+    if (passwordStrength.score <= 2) {
+      Alert.alert('Thông báo', 'Vui lòng chọn mật khẩu mạnh hơn');
+      return;
+    }
+
     setIsLoading(true);
-
     try {
-      // Gọi hàm resetPassword từ hook useAuth với đúng tham số email và mật khẩu mới
-      const success = await resetPassword(email, newPassword);
-
+      const success = await resetPassword(email, verificationCode, newPassword);
       if (success) {
         setCurrentStep(ForgotPasswordStep.SUCCESS);
       } else {
@@ -120,13 +120,27 @@ export default function ForgotPasswordScreen() {
       }
     } catch (error) {
       Alert.alert('Thông báo', 'Đã xảy ra lỗi trong quá trình đặt lại mật khẩu');
-      console.error(error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Hiển thị các bước khác nhau của quy trình đặt lại mật khẩu
+  const handleResendOTP = async () => {
+    setIsLoading(true);
+    try {
+      const success = await resendOtp(email);
+      if (success) {
+        setCountdown(60); 
+        Alert.alert('Thông báo', 'Đã gửi lại mã OTP mới vào email của bạn');
+      }
+    } catch (error) {
+      Alert.alert('Thông báo', 'Không thể gửi lại mã OTP. Vui lòng thử lại sau.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+ 
   const renderStepContent = () => {
     switch (currentStep) {
       case ForgotPasswordStep.EMAIL_INPUT:
@@ -208,8 +222,17 @@ export default function ForgotPasswordScreen() {
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.resendButton} onPress={handleSendVerificationCode}>
-                <Text style={styles.resendButtonText}>Gửi lại mã</Text>
+              <TouchableOpacity 
+                style={[
+                  styles.resendButton, 
+                  countdown > 0 && styles.resendButtonDisabled
+                ]} 
+                onPress={handleResendOTP}
+                disabled={countdown > 0}
+              >
+                <Text style={styles.resendButtonText}>
+                  {countdown > 0 ? `Gửi lại mã (${countdown}s)` : 'Gửi lại mã'}
+                </Text>
               </TouchableOpacity>
             </View>
           </>
@@ -247,6 +270,9 @@ export default function ForgotPasswordScreen() {
                     )}
                   </TouchableOpacity>
                 </View>
+                {newPassword.length > 0 && (
+                  <PasswordStrengthMeter password={newPassword} />
+                )}
               </View>
 
               <View style={styles.inputContainer}>
@@ -486,6 +512,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
     paddingVertical: 8,
+  },
+  resendButtonDisabled: {
+    opacity: 0.5,
   },
   resendButtonText: {
     color: '#2563EB',
