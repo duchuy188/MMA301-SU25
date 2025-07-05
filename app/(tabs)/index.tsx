@@ -1,6 +1,7 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput } from 'react-native';
 import { router } from 'expo-router';
-import { Star, Crown, Clock } from 'lucide-react-native';
+import { Star, Crown, Clock, Search, Filter } from 'lucide-react-native';
+import { useState } from 'react';
 
 const featuredMovies = [
   {
@@ -45,12 +46,104 @@ const nowShowingMovies = [
   },
 ];
 
+// Extract unique genres from movies
+const extractGenres = (movies: any[]) => {
+  const genreSet = new Set<string>();
+  movies.forEach(movie => {
+    const genres = movie.genre.split(', ');
+    genres.forEach((genre: string) => genreSet.add(genre));
+  });
+  return Array.from(genreSet);
+};
+
+const allGenres = extractGenres([...nowShowingMovies, ...featuredMovies]);
+
 export default function HomeScreen() {
+  const [activeTab, setActiveTab] = useState('nowShowing');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
+
   const handleMoviePress = (movie: any) => {
     router.push({
       pathname: '/movie-detail',
       params: { movieId: movie.id },
     });
+  };
+
+  const toggleGenre = (genre: string) => {
+    if (selectedGenres.includes(genre)) {
+      setSelectedGenres(selectedGenres.filter(g => g !== genre));
+    } else {
+      setSelectedGenres([...selectedGenres, genre]);
+    }
+  };
+
+  const clearFilters = () => {
+    setSelectedGenres([]);
+  };
+
+  const renderMovieGrid = (movies: any[], isComingSoon = false) => {
+    let filteredMovies = movies;
+    
+    // Apply text search filter
+    if (searchQuery.trim()) {
+      filteredMovies = filteredMovies.filter(movie => 
+        movie.title.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
+    // Apply genre filters
+    if (selectedGenres.length > 0) {
+      filteredMovies = filteredMovies.filter(movie => {
+        const movieGenres = movie.genre.split(', ');
+        return selectedGenres.some(genre => movieGenres.includes(genre));
+      });
+    }
+    
+    return (
+      <View style={styles.moviesGrid}>
+        {filteredMovies.length > 0 ? (
+          filteredMovies.map((movie) => (
+            <TouchableOpacity
+              key={isComingSoon ? `coming-${movie.id}` : movie.id}
+              style={styles.movieCard}
+              onPress={() => handleMoviePress(movie)}
+            >
+              <View style={styles.movieImageContainer}>
+                <Image source={{ uri: movie.image }} style={styles.movieImage} />
+                {movie.isVIP && !isComingSoon && (
+                  <View style={styles.vipBadgeSmall}>
+                    <Crown size={10} color="#000000" />
+                  </View>
+                )}
+                {isComingSoon && (
+                  <View style={styles.comingSoonBadge}>
+                    <Text style={styles.comingSoonText}>Sắp chiếu</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.movieDetails}>
+                <Text style={styles.movieTitleSmall} numberOfLines={2}>
+                  {movie.title}
+                </Text>
+                <Text style={styles.movieGenre} numberOfLines={1}>
+                  {movie.genre}
+                </Text>
+                <View style={styles.movieMetaSmall}>
+                  <Star size={12} color="#FFD700" />
+                  <Text style={styles.ratingSmall}>{movie.rating}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={styles.noResultsContainer}>
+            <Text style={styles.noResultsText}>Không tìm thấy phim phù hợp</Text>
+          </View>
+        )}
+      </View>
+    );
   };
 
   return (
@@ -60,105 +153,83 @@ export default function HomeScreen() {
         <Text style={styles.brandText}>GALAXY CINEMA</Text>
       </View>
 
-      {/* Featured Movies Carousel */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Phim nổi bật</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.carousel}>
-          {featuredMovies.map((movie) => (
-            <TouchableOpacity
-              key={movie.id}
-              style={styles.featuredCard}
-              onPress={() => handleMoviePress(movie)}
-            >
-              <View style={styles.goldFrame}>
-                <Image source={{ uri: movie.image }} style={styles.featuredImage} />
-                {movie.isVIP && (
-                  <View style={styles.vipBadge}>
-                    <Crown size={12} color="#000000" />
-                    <Text style={styles.vipText}>VIP</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.movieInfo}>
-                <Text style={styles.movieTitle}>{movie.title}</Text>
-                <View style={styles.movieMeta}>
-                  <Star size={14} color="#FFD700" />
-                  <Text style={styles.rating}>{movie.rating}</Text>
-                  <Clock size={14} color="#666" />
-                  <Text style={styles.duration}>{movie.duration}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Search size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Tìm kiếm phim..."
+          placeholderTextColor="#666"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        <TouchableOpacity onPress={() => setShowFilters(!showFilters)}>
+          <Filter size={20} color={showFilters || selectedGenres.length > 0 ? "#FFD700" : "#666"} />
+        </TouchableOpacity>
       </View>
 
-      {/* Now Showing */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Đang chiếu</Text>
-        <View style={styles.moviesGrid}>
-          {nowShowingMovies.map((movie) => (
-            <TouchableOpacity
-              key={movie.id}
-              style={styles.movieCard}
-              onPress={() => handleMoviePress(movie)}
-            >
-              <View style={styles.movieImageContainer}>
-                <Image source={{ uri: movie.image }} style={styles.movieImage} />
-                {movie.isVIP && (
-                  <View style={styles.vipBadgeSmall}>
-                    <Crown size={10} color="#000000" />
-                  </View>
-                )}
-              </View>
-              <View style={styles.movieDetails}>
-                <Text style={styles.movieTitleSmall} numberOfLines={2}>
-                  {movie.title}
+      {/* Filters */}
+      {showFilters && (
+        <View style={styles.filtersContainer}>
+          <View style={styles.filterHeader}>
+            <Text style={styles.filterTitle}>Lọc theo thể loại</Text>
+            {selectedGenres.length > 0 && (
+              <TouchableOpacity onPress={clearFilters}>
+                <Text style={styles.clearFilters}>Xóa bộ lọc</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          <View style={styles.genreContainer}>
+            {allGenres.map((genre) => (
+              <TouchableOpacity
+                key={genre}
+                style={[
+                  styles.genreTag,
+                  selectedGenres.includes(genre) && styles.selectedGenreTag
+                ]}
+                onPress={() => toggleGenre(genre)}
+              >
+                <Text
+                  style={[
+                    styles.genreText,
+                    selectedGenres.includes(genre) && styles.selectedGenreText
+                  ]}
+                >
+                  {genre}
                 </Text>
-                <Text style={styles.movieGenre} numberOfLines={1}>
-                  {movie.genre}
-                </Text>
-                <View style={styles.movieMetaSmall}>
-                  <Star size={12} color="#FFD700" />
-                  <Text style={styles.ratingSmall}>{movie.rating}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
+      )}
+
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'nowShowing' && styles.activeTabButton]}
+          onPress={() => setActiveTab('nowShowing')}
+        >
+          <Text style={[styles.tabText, activeTab === 'nowShowing' && styles.activeTabText]}>
+            Đang chiếu
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabButton, activeTab === 'comingSoon' && styles.activeTabButton]}
+          onPress={() => setActiveTab('comingSoon')}
+        >
+          <Text style={[styles.tabText, activeTab === 'comingSoon' && styles.activeTabText]}>
+            Sắp chiếu
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Coming Soon */}
+      {/* Content based on active tab */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Sắp chiếu</Text>
-        <View style={styles.moviesGrid}>
-          {featuredMovies.slice(0, 4).map((movie) => (
-            <TouchableOpacity
-              key={`coming-${movie.id}`}
-              style={styles.movieCard}
-              onPress={() => handleMoviePress(movie)}
-            >
-              <View style={styles.movieImageContainer}>
-                <Image source={{ uri: movie.image }} style={styles.movieImage} />
-                <View style={styles.comingSoonBadge}>
-                  <Text style={styles.comingSoonText}>Sắp chiếu</Text>
-                </View>
-              </View>
-              <View style={styles.movieDetails}>
-                <Text style={styles.movieTitleSmall} numberOfLines={2}>
-                  {movie.title}
-                </Text>
-                <Text style={styles.movieGenre} numberOfLines={1}>
-                  {movie.genre}
-                </Text>
-                <View style={styles.movieMetaSmall}>
-                  <Star size={12} color="#FFD700" />
-                  <Text style={styles.ratingSmall}>{movie.rating}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {activeTab === 'nowShowing' ? (
+          renderMovieGrid(nowShowingMovies)
+        ) : (
+          renderMovieGrid(featuredMovies.slice(0, 4), true)
+        )}
       </View>
     </ScrollView>
   );
@@ -171,8 +242,8 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingTop: 40,
+    paddingBottom: 15,
     alignItems: 'center',
   },
   welcomeText: {
@@ -189,80 +260,101 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
     textShadowRadius: 8,
   },
-  section: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontFamily: 'PlayfairDisplay-Bold',
-    fontSize: 20,
-    color: '#FFD700',
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
     marginBottom: 15,
-    paddingHorizontal: 20,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#333',
   },
-  carousel: {
-    paddingLeft: 20,
+  searchIcon: {
+    marginRight: 8,
   },
-  featuredCard: {
-    marginRight: 15,
-    width: 200,
-  },
-  goldFrame: {
-    position: 'relative',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#FFD700',
-    overflow: 'hidden',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  featuredImage: {
-    width: '100%',
-    height: 280,
-    resizeMode: 'cover',
-  },
-  vipBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  vipText: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 10,
-    color: '#000000',
-  },
-  movieInfo: {
-    marginTop: 10,
-  },
-  movieTitle: {
-    fontFamily: 'Montserrat-SemiBold',
-    fontSize: 16,
+  searchInput: {
+    flex: 1,
+    height: 40,
     color: '#FFFFFF',
-    marginBottom: 5,
+    fontFamily: 'Montserrat-Regular',
   },
-  movieMeta: {
+  filtersContainer: {
+    marginHorizontal: 20,
+    marginBottom: 15,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  filterHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  filterTitle: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  clearFilters: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 12,
+    color: '#FFD700',
+  },
+  genreContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  rating: {
+  genreTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#333',
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  selectedGenreTag: {
+    backgroundColor: '#FFD700',
+  },
+  genreText: {
     fontFamily: 'Montserrat-Medium',
-    fontSize: 14,
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  selectedGenreText: {
+    color: '#000000',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  activeTabButton: {
+    backgroundColor: '#FFD700',
+  },
+  tabText: {
+    fontFamily: 'PlayfairDisplay-Bold',
+    fontSize: 16,
     color: '#FFD700',
   },
-  duration: {
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 12,
-    color: '#666',
+  activeTabText: {
+    color: '#000000',
+  },
+  section: {
+    marginBottom: 30,
   },
   moviesGrid: {
     flexDirection: 'row',
@@ -333,5 +425,15 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Medium',
     fontSize: 12,
     color: '#FFD700',
+  },
+  noResultsContainer: {
+    width: '100%',
+    padding: 20,
+    alignItems: 'center',
+  },
+  noResultsText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#666',
   },
 });
