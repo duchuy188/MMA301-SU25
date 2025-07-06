@@ -1,53 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
 import { Star, Crown, Clock, Search, Filter } from 'lucide-react-native';
-import { useState } from 'react';
-
-const featuredMovies = [
-  {
-    id: '1',
-    title: 'Avengers: Endgame',
-    image: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-    rating: 9.2,
-    duration: '181 phút',
-    genre: 'Hành động, Phiêu lưu',
-    isVIP: true,
-  },
-  {
-    id: '2',
-    title: 'The Batman',
-    image: 'https://images.pexels.com/photos/7991472/pexels-photo-7991472.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-    rating: 8.8,
-    duration: '176 phút',
-    genre: 'Hành động, Tâm lý',
-    isVIP: false,
-  },
-  {
-    id: '3',
-    title: 'Dune: Part Two',
-    image: 'https://images.pexels.com/photos/7991464/pexels-photo-7991464.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-    rating: 9.0,
-    duration: '166 phút',
-    genre: 'Khoa học viễn tưởng',
-    isVIP: true,
-  },
-];
-
-const nowShowingMovies = [
-  ...featuredMovies,
-  {
-    id: '4',
-    title: 'Spider-Man: No Way Home',
-    image: 'https://images.pexels.com/photos/7991583/pexels-photo-7991583.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-    rating: 8.9,
-    duration: '148 phút',
-    genre: 'Hành động, Phiêu lưu',
-    isVIP: false,
-  },
-];
+import { useState, useCallback } from 'react';
+import { Movie, getPublicMovies, getMoviesByStatus } from '../../services/movie';
 
 // Extract unique genres from movies
-const extractGenres = (movies: any[]) => {
+const extractGenres = (movies: Movie[]) => {
   const genreSet = new Set<string>();
   movies.forEach(movie => {
     const genres = movie.genre.split(', ');
@@ -56,18 +14,47 @@ const extractGenres = (movies: any[]) => {
   return Array.from(genreSet);
 };
 
-const allGenres = extractGenres([...nowShowingMovies, ...featuredMovies]);
+// Ở ngoài component, tạo biến lưu trữ dữ liệu
+let cachedMovies: Movie[] = [];
 
 export default function HomeScreen() {
+  const [movies, setMovies] = useState<Movie[]>(cachedMovies);
+  const [loading, setLoading] = useState(cachedMovies.length === 0);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('nowShowing');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
 
-  const handleMoviePress = (movie: any) => {
+  // Fetch movies when the screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      const fetchMovies = async () => {
+        // Chỉ tải dữ liệu khi cache rỗng
+        if (cachedMovies.length === 0) {
+          setLoading(true);
+          try {
+            const data = await getPublicMovies();
+            setMovies(data);
+            cachedMovies = data; // Lưu vào cache
+            setError(null);
+          } catch (err) {
+            setError('Không thể tải danh sách phim. Vui lòng thử lại sau.');
+            console.error('Error fetching movies:', err);
+          } finally {
+            setLoading(false);
+          }
+        }
+      };
+
+      fetchMovies();
+    }, [])
+  );
+
+  const handleMoviePress = (movie: Movie) => {
     router.push({
       pathname: '/movie-detail',
-      params: { movieId: movie.id },
+      params: { movieId: movie._id },
     });
   };
 
@@ -83,7 +70,14 @@ export default function HomeScreen() {
     setSelectedGenres([]);
   };
 
-  const renderMovieGrid = (movies: any[], isComingSoon = false) => {
+  // Separate movies into "now showing" and "coming soon" based on showingStatus
+  const nowShowingMovies = movies.filter(movie => movie.showingStatus === 'now-showing');
+  const comingSoonMovies = movies.filter(movie => movie.showingStatus === 'coming-soon');
+  
+  // Extract all genres from both movie lists
+  const allGenres = extractGenres([...nowShowingMovies, ...comingSoonMovies]);
+
+  const renderMovieGrid = (movies: Movie[], isComingSoon = false) => {
     let filteredMovies = movies;
     
     // Apply text search filter
@@ -101,38 +95,62 @@ export default function HomeScreen() {
       });
     }
     
+    if (loading) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FFD700" />
+          <Text style={styles.loadingText}>Đang tải phim...</Text>
+        </View>
+      );
+    }
+    
+    if (error) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity 
+            style={styles.retryButton}
+            onPress={() => {
+              setLoading(true);
+              getPublicMovies()
+                .then(data => {
+                  setMovies(data);
+                  setError(null);
+                })
+                .catch(err => {
+                  setError('Không thể tải danh sách phim. Vui lòng thử lại sau.');
+                })
+                .finally(() => setLoading(false));
+            }}
+          >
+            <Text style={styles.retryButtonText}>Thử lại</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
     return (
       <View style={styles.moviesGrid}>
         {filteredMovies.length > 0 ? (
           filteredMovies.map((movie) => (
             <TouchableOpacity
-              key={isComingSoon ? `coming-${movie.id}` : movie.id}
+              key={isComingSoon ? `coming-${movie._id}` : movie._id}
               style={styles.movieCard}
               onPress={() => handleMoviePress(movie)}
             >
               <View style={styles.movieImageContainer}>
-                <Image source={{ uri: movie.image }} style={styles.movieImage} />
-                {movie.isVIP && !isComingSoon && (
-                  <View style={styles.vipBadgeSmall}>
-                    <Crown size={10} color="#000000" />
-                  </View>
-                )}
-                {isComingSoon && (
-                  <View style={styles.comingSoonBadge}>
-                    <Text style={styles.comingSoonText}>Sắp chiếu</Text>
-                  </View>
-                )}
+                <Image source={{ uri: movie.posterUrl }} style={styles.movieImage} />
               </View>
               <View style={styles.movieDetails}>
                 <Text style={styles.movieTitleSmall} numberOfLines={2}>
-                  {movie.title}
+                  {movie.vietnameseTitle || movie.title}
                 </Text>
                 <Text style={styles.movieGenre} numberOfLines={1}>
                   {movie.genre}
                 </Text>
                 <View style={styles.movieMetaSmall}>
                   <Star size={12} color="#FFD700" />
-                  <Text style={styles.ratingSmall}>{movie.rating}</Text>
+                  <Text style={styles.ratingSmall}>{movie.rating || 'N/A'}</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -144,6 +162,21 @@ export default function HomeScreen() {
         )}
       </View>
     );
+  };
+
+  // Thêm hàm refresh để tải lại dữ liệu khi cần
+  const refreshMovies = async () => {
+    setLoading(true);
+    try {
+      const data = await getPublicMovies();
+      setMovies(data);
+      cachedMovies = data;
+      setError(null);
+    } catch (err) {
+      setError('Không thể tải danh sách phim. Vui lòng thử lại sau.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -228,7 +261,7 @@ export default function HomeScreen() {
         {activeTab === 'nowShowing' ? (
           renderMovieGrid(nowShowingMovies)
         ) : (
-          renderMovieGrid(featuredMovies.slice(0, 4), true)
+          renderMovieGrid(comingSoonMovies, true)
         )}
       </View>
     </ScrollView>
@@ -376,14 +409,6 @@ const styles = StyleSheet.create({
     height: 200,
     resizeMode: 'cover',
   },
-  vipBadgeSmall: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: '#FFD700',
-    padding: 4,
-    borderRadius: 8,
-  },
   comingSoonBadge: {
     position: 'absolute',
     top: 6,
@@ -435,5 +460,37 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     fontSize: 14,
     color: '#666',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginTop: 10,
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#FF6B6B',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    color: '#000000',
   },
 });

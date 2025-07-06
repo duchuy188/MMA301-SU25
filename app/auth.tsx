@@ -30,7 +30,7 @@ export default function AuthScreen() {
     if (!email || !password) {
       Toast.show({
         type: 'error',
-        text1: 'Lỗi',
+        text1: 'Đăng nhập thất bại',
         text2: 'Vui lòng nhập đầy đủ email và mật khẩu',
         visibilityTime: 3000,
       });
@@ -52,6 +52,11 @@ export default function AuthScreen() {
       
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
+      } else if (error.message) {
+        // Không hiển thị tên lỗi kỹ thuật
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.';
+        }
       }
       
       Toast.show({

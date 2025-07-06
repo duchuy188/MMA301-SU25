@@ -1,25 +1,41 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, ScrollView, ActivityIndicator, Alert, Modal } from 'react-native';
 import { router } from 'expo-router';
-import { ArrowLeft, Camera, X, Edit2 } from 'lucide-react-native';
+import { ArrowLeft, Camera, X, Edit2, Calendar, Lock, Eye, EyeOff } from 'lucide-react-native';
 import Toast from 'react-native-toast-message';
-import { getProfile, updateProfile } from '../services/auth';
+import { getProfile, updateProfile, changePassword } from '../services/auth';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function EditProfile() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [birthday, setBirthday] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [avatar, setAvatar] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [editingPhone, setEditingPhone] = useState(false);
+  const [editingBirthday, setEditingBirthday] = useState(false);
+  
+  // Date picker state
+  const [tempYear, setTempYear] = useState(new Date().getFullYear());
+  const [tempMonth, setTempMonth] = useState(new Date().getMonth());
+  const [tempDay, setTempDay] = useState(new Date().getDate());
 
   useEffect(() => {
     loadUserProfile();
   }, []);
+
+  useEffect(() => {
+    if (birthday) {
+      setTempYear(birthday.getFullYear());
+      setTempMonth(birthday.getMonth());
+      setTempDay(birthday.getDate());
+    }
+  }, [birthday]);
 
   const loadUserProfile = async () => {
     try {
@@ -31,6 +47,11 @@ export default function EditProfile() {
       setEmail(user.email || '');
       setPhone(user.phone || '');
       setAvatar(user.avatar || null);
+      
+      // Xử lý ngày sinh nếu có
+      if (user.birthday) {
+        setBirthday(new Date(user.birthday));
+      }
       
       setLoading(false);
     } catch (error) {
@@ -44,7 +65,7 @@ export default function EditProfile() {
     }
   };
 
-  // Hiển thị tùy chọn ảnh khi nhấp vào avatar
+  
   const showImageOptions = () => {
     Alert.alert(
       "Thay đổi ảnh đại diện",
@@ -131,6 +152,23 @@ export default function EditProfile() {
     }
   };
 
+  const handleBirthdayPress = () => {
+    if (editingBirthday) {
+      setShowDatePicker(true);
+    }
+  };
+
+  const handleDateChange = () => {
+    const newDate = new Date(tempYear, tempMonth, tempDay);
+    setBirthday(newDate);
+    setShowDatePicker(false);
+  };
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return '';
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
   const handleSave = async () => {
     if (!name.trim()) {
       Toast.show({
@@ -169,17 +207,37 @@ export default function EditProfile() {
       });
       
       router.back();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Lỗi khi cập nhật:', error);
+      
+      let errorMessage = 'Không thể cập nhật thông tin';
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      }
+      
       Toast.show({
         type: 'error',
-        text1: 'Không thể cập nhật thông tin',
+        text1: errorMessage,
         visibilityTime: 3000,
       });
     } finally {
       setSaving(false);
     }
   };
+
+  // Generate arrays for picker
+  const years = Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i);
+  const months = Array.from({ length: 12 }, (_, i) => i);
+  const getMonthName = (month: number) => {
+    return ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
+            'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'][month];
+  };
+  
+  const getDaysInMonth = (year: number, month: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+  
+  const days = Array.from({ length: getDaysInMonth(tempYear, tempMonth) }, (_, i) => i + 1);
 
   return (
     <View style={styles.container}>
@@ -197,7 +255,11 @@ export default function EditProfile() {
           <Text style={styles.loadingText}>Đang tải thông tin...</Text>
         </View>
       ) : (
-        <ScrollView style={styles.content}>
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Avatar section */}
           <View style={styles.avatarContainer}>
             <TouchableOpacity onPress={showImageOptions}>
@@ -212,12 +274,6 @@ export default function EditProfile() {
                 <Camera size={20} color="#000000" />
               </View>
             </TouchableOpacity>
-            
-            {avatar && (
-              <TouchableOpacity style={styles.removeAvatarButton} onPress={() => setAvatar(null)}>
-                <X size={16} color="#FFFFFF" />
-              </TouchableOpacity>
-            )}
           </View>
 
           <View style={styles.form}>
@@ -274,6 +330,29 @@ export default function EditProfile() {
               </View>
             </View>
 
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Ngày sinh</Text>
+              <View style={styles.inputWrapper}>
+                <TouchableOpacity 
+                  style={[styles.input, !editingBirthday && styles.disabledInput, styles.dateInput]}
+                  onPress={handleBirthdayPress}
+                  disabled={!editingBirthday}
+                >
+                  <Text style={[styles.dateText, !birthday && styles.placeholderText]}>
+                    {birthday ? formatDate(birthday) : "Chọn ngày sinh"}
+                  </Text>
+                  <Calendar size={18} color={editingBirthday ? "#FFD700" : "#666"} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.editButton}
+                  onPress={() => setEditingBirthday(!editingBirthday)}
+                >
+                  <Edit2 size={18} color="#FFD700" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Đặt nút Lưu thay đổi trước nút Đổi mật khẩu */}
             <TouchableOpacity
               style={[styles.saveButton, saving && styles.savingButton]}
               onPress={handleSave}
@@ -285,9 +364,124 @@ export default function EditProfile() {
                 <Text style={styles.saveButtonText}>Lưu thay đổi</Text>
               )}
             </TouchableOpacity>
+
+            {/* Nút đổi mật khẩu được thiết kế lại */}
+            <TouchableOpacity
+              style={styles.securitySection}
+              onPress={() => router.push('/change-password')}
+            >
+              <View style={styles.securityContent}>
+                <Lock size={20} color="#FFD700" />
+                <View style={styles.securityTextContainer}>
+                  <Text style={styles.securityTitle}>Đổi mật khẩu</Text>
+                  <Text style={styles.securitySubtitle}>Cập nhật mật khẩu để bảo vệ tài khoản</Text>
+                </View>
+              </View>
+              <ArrowLeft size={20} color="#FFD700" style={{ transform: [{ rotate: '180deg' }] }} />
+            </TouchableOpacity>
+            
+            {/* Thêm khoảng trống dưới cùng để đảm bảo có thể cuộn xuống */}
+            <View style={styles.bottomSpacing} />
           </View>
         </ScrollView>
       )}
+      
+      {/* Custom Date Picker Modal */}
+      <Modal
+        visible={showDatePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDatePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.datePickerContainer}>
+            <Text style={styles.datePickerTitle}>Chọn ngày sinh</Text>
+            
+            <View style={styles.datePickerContent}>
+              {/* Day Picker */}
+              <ScrollView style={styles.pickerColumn}>
+                {days.map((day) => (
+                  <TouchableOpacity
+                    key={`day-${day}`}
+                    style={[
+                      styles.pickerItem,
+                      tempDay === day && styles.pickerItemSelected
+                    ]}
+                    onPress={() => setTempDay(day)}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      tempDay === day && styles.pickerItemTextSelected
+                    ]}>
+                      {day}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              {/* Month Picker */}
+              <ScrollView style={styles.pickerColumn}>
+                {months.map((month) => (
+                  <TouchableOpacity
+                    key={`month-${month}`}
+                    style={[
+                      styles.pickerItem,
+                      tempMonth === month && styles.pickerItemSelected
+                    ]}
+                    onPress={() => setTempMonth(month)}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      tempMonth === month && styles.pickerItemTextSelected
+                    ]}>
+                      {getMonthName(month)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              {/* Year Picker */}
+              <ScrollView style={styles.pickerColumn}>
+                {years.map((year) => (
+                  <TouchableOpacity
+                    key={`year-${year}`}
+                    style={[
+                      styles.pickerItem,
+                      tempYear === year && styles.pickerItemSelected
+                    ]}
+                    onPress={() => setTempYear(year)}
+                  >
+                    <Text style={[
+                      styles.pickerItemText,
+                      tempYear === year && styles.pickerItemTextSelected
+                    ]}>
+                      {year}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+            
+            <View style={styles.datePickerActions}>
+              <TouchableOpacity
+                style={styles.datePickerButton}
+                onPress={() => setShowDatePicker(false)}
+              >
+                <Text style={styles.datePickerButtonText}>Hủy</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.datePickerButton, styles.datePickerConfirmButton]}
+                onPress={handleDateChange}
+              >
+                <Text style={[styles.datePickerButtonText, styles.datePickerConfirmText]}>
+                  Xác nhận
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -326,6 +520,9 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+  },
+  contentContainer: {
+    paddingBottom: 50,
   },
   avatarContainer: {
     alignItems: 'center',
@@ -366,17 +563,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#000000',
-  },
-  removeAvatarButton: {
-    position: 'absolute',
-    top: 0,
-    right: '35%',
-    backgroundColor: '#FF4444',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   form: {
     gap: 20,
@@ -443,5 +629,127 @@ const styles = StyleSheet.create({
   savingButton: {
     backgroundColor: '#A89347',
     opacity: 0.7,
+  },
+  dateInput: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingRight: 48,
+  },
+  dateText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  placeholderText: {
+    color: '#666',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  datePickerContainer: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 16,
+    padding: 20,
+    width: '80%',
+    maxHeight: '70%',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  datePickerTitle: {
+    fontFamily: 'PlayfairDisplay-Bold',
+    fontSize: 18,
+    color: '#FFD700',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  datePickerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: 200,
+  },
+  pickerColumn: {
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  pickerItem: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  pickerItemSelected: {
+    backgroundColor: '#FFD700',
+  },
+  pickerItemText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  pickerItemTextSelected: {
+    color: '#000000',
+    fontFamily: 'Montserrat-Bold',
+  },
+  datePickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  datePickerButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: '#333',
+    flex: 1,
+    marginHorizontal: 5,
+    alignItems: 'center',
+  },
+  datePickerConfirmButton: {
+    backgroundColor: '#FFD700',
+  },
+  datePickerButtonText: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  datePickerConfirmText: {
+    color: '#000000',
+  },
+  // Style cho nút đổi mật khẩu
+  securitySection: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  securityContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  securityTextContainer: {
+    marginLeft: 12,
+  },
+  securityTitle: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 16,
+    color: '#FFD700',
+  },
+  securitySubtitle: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    color: '#FFD700',
+    marginTop: 2,
+    opacity: 0.8,
+  },
+  bottomSpacing: {
+    height: 30,
   },
 });

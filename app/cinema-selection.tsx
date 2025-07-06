@@ -1,6 +1,8 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, MapPin, Star, Crown, Monitor } from 'lucide-react-native';
+import { useState, useEffect } from 'react';
+import { Theater, getTheaters } from '../services/theater';
 
 const cinemas = [
   {
@@ -46,14 +48,59 @@ const cinemas = [
 ];
 
 export default function CinemaSelectionScreen() {
-  const handleCinemaSelect = (cinema: any) => {
-    if (cinema.available) {
+  const [theaters, setTheaters] = useState<Theater[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchTheaters = async () => {
+    try {
+      setLoading(true);
+      const data = await getTheaters();
+      setTheaters(data);
+    } catch (err) {
+      setError('Không thể tải danh sách rạp. Vui lòng thử lại sau.');
+      console.error('Error fetching theaters:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTheaters();
+  }, []);
+
+  const handleCinemaSelect = (theater: Theater) => {
+    if (theater.status) {
       router.push({
         pathname: '/datetime-selection',
-        params: { cinemaId: cinema.id },
+        params: { theaterId: theater._id },
       });
     }
   };
+
+  // Hiển thị loading hoặc error nếu cần
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#FFD700" />
+        <Text style={styles.loadingText}>Đang tải danh sách rạp...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => fetchTheaters()}
+        >
+          <Text style={styles.retryButtonText}>Thử lại</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -66,36 +113,30 @@ export default function CinemaSelectionScreen() {
 
       <ScrollView style={styles.content}>
         <View style={styles.cinemasList}>
-          {cinemas.map((cinema) => (
+          {theaters.map((theater) => (
             <TouchableOpacity
-              key={cinema.id}
+              key={theater._id}
               style={[
                 styles.cinemaCard,
-                !cinema.available && styles.cinemaCardDisabled,
+                !theater.status && styles.cinemaCardDisabled,
               ]}
-              onPress={() => handleCinemaSelect(cinema)}
-              disabled={!cinema.available}
+              onPress={() => handleCinemaSelect(theater)}
+              disabled={!theater.status}
             >
               <View style={styles.cinemaHeader}>
                 <View style={styles.cinemaInfo}>
-                  <Text style={styles.cinemaName}>{cinema.name}</Text>
-                  {cinema.isVIP && (
-                    <View style={styles.vipBadge}>
-                      <Crown size={12} color="#000000" />
-                      <Text style={styles.vipText}>VIP</Text>
-                    </View>
-                  )}
+                  <Text style={styles.cinemaName}>{theater.name}</Text>
                 </View>
                 <View style={styles.statusContainer}>
                   <View style={[
                     styles.statusIndicator,
-                    cinema.available ? styles.statusAvailable : styles.statusUnavailable
+                    theater.status ? styles.statusAvailable : styles.statusUnavailable
                   ]} />
                   <Text style={[
                     styles.statusText,
-                    cinema.available ? styles.statusAvailableText : styles.statusUnavailableText
+                    theater.status ? styles.statusAvailableText : styles.statusUnavailableText
                   ]}>
-                    {cinema.available ? 'Còn chỗ' : 'Đã hết'}
+                    {theater.status ? 'Còn chỗ' : 'Đã hết'}
                   </Text>
                 </View>
               </View>
@@ -103,27 +144,24 @@ export default function CinemaSelectionScreen() {
               <View style={styles.cinemaDetails}>
                 <View style={styles.locationRow}>
                   <MapPin size={14} color="#666" />
-                  <Text style={styles.addressText}>{cinema.address}</Text>
+                  <Text style={styles.addressText}>{theater.address}</Text>
                 </View>
                 <View style={styles.metaRow}>
                   <View style={styles.ratingContainer}>
                     <Star size={14} color="#FFD700" />
-                    <Text style={styles.ratingText}>{cinema.rating}</Text>
+                    <Text style={styles.ratingText}>{theater.screens || 'N/A'} phòng</Text>
                   </View>
-                  <Text style={styles.distanceText}>{cinema.distance}</Text>
                 </View>
-              </View>
-
-              <View style={styles.featuresContainer}>
-                {cinema.features.map((feature, index) => (
-                  <View key={index} style={styles.featureTag}>
-                    {feature === 'VIP' && <Crown size={12} color="#FFD700" />}
-                    {feature === 'Ghế ngả' && <Monitor size={12} color="#FFD700" />}
-                    {feature === 'Bar' && <Star size={12} color="#FFD700" />}
-                    {feature === 'Màn hình lớn' && <Monitor size={12} color="#FFD700" />}
-                    <Text style={styles.featureText}>{feature}</Text>
-                  </View>
-                ))}
+                
+                <TouchableOpacity 
+                  style={styles.detailButton}
+                  onPress={() => router.push({
+                    pathname: '/theater-detail',
+                    params: { theaterId: theater._id }
+                  })}
+                >
+                  <Text style={styles.detailButtonText}>Xem chi tiết</Text>
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           ))}
@@ -189,20 +227,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     flex: 1,
-  },
-  vipBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFD700',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  vipText: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 10,
-    color: '#000000',
   },
   statusContainer: {
     flexDirection: 'row',
@@ -282,6 +306,51 @@ const styles = StyleSheet.create({
   featureText: {
     fontFamily: 'Montserrat-Regular',
     fontSize: 11,
+    color: '#FFD700',
+  },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+  },
+  loadingText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#FFFFFF',
+    marginTop: 10,
+  },
+  errorText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#FF6B6B',
+    marginBottom: 10,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  retryButton: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    color: '#000000',
+  },
+  detailButton: {
+    backgroundColor: '#333',
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  detailButtonText: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 14,
     color: '#FFD700',
   },
 });

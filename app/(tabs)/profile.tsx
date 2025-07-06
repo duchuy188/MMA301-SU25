@@ -1,8 +1,8 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Crown, Star, Ticket, Gift, Settings, Bell, Shield, LogOut } from 'lucide-react-native';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import Toast from 'react-native-toast-message';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { logout, getProfile } from '../../services/auth';
 
 const recentTickets = [
@@ -53,6 +53,13 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   };
+
+  // Sử dụng useFocusEffect để tải lại dữ liệu mỗi khi màn hình được focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserProfile();
+    }, [])
+  );
 
   // Xử lý đăng xuất với xác nhận
   const handleLogout = () => {
