@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
@@ -14,11 +14,15 @@ import {
   Montserrat_700Bold,
 } from '@expo-google-fonts/montserrat';
 import * as SplashScreen from 'expo-splash-screen';
+import Toast from 'react-native-toast-message';
+import { loadAuthTokens } from '../services/auth';
+import { View, ActivityIndicator } from 'react-native';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useFrameworkReady();
+  const [isAuthLoaded, setIsAuthLoaded] = useState(false);
 
   const [fontsLoaded, fontError] = useFonts({
     'PlayfairDisplay-Regular': PlayfairDisplay_400Regular,
@@ -30,13 +34,26 @@ export default function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    async function loadAuth() {
+      await loadAuthTokens();
+      setIsAuthLoaded(true);
+    }
+    
+    loadAuth();
+  }, []);
+
+  useEffect(() => {
+    if ((fontsLoaded || fontError) && isAuthLoaded) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, isAuthLoaded]);
 
-  if (!fontsLoaded && !fontError) {
-    return null;
+  if (!fontsLoaded && !fontError || !isAuthLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+        <ActivityIndicator size="large" color="#FFD700" />
+      </View>
+    );
   }
 
   return (
@@ -51,9 +68,11 @@ export default function RootLayout() {
         <Stack.Screen name="seat-selection" />
         <Stack.Screen name="payment" />
         <Stack.Screen name="e-ticket" />
+        <Stack.Screen name="change-password" />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="light" />
+      <Toast />
     </>
   );
 }

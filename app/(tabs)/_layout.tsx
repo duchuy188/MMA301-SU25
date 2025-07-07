@@ -1,60 +1,58 @@
 import { Tabs } from 'expo-router';
-import { Chrome as Home, Ticket, Gift, User } from 'lucide-react-native';
+import { Film, Ticket, Gift, User, MessageSquare } from 'lucide-react-native';
 
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: '#1A1A1A',
-          borderTopWidth: 0,
-          height: 70,
+          backgroundColor: '#000000',
+          borderTopColor: '#333',
+          height: 60,
           paddingBottom: 10,
-          paddingTop: 10,
         },
         tabBarActiveTintColor: '#FFD700',
-        tabBarInactiveTintColor: '#666',
+        tabBarInactiveTintColor: '#999',
         tabBarLabelStyle: {
           fontFamily: 'Montserrat-Medium',
-          fontSize: 11,
+          fontSize: 12,
         },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Trang chủ',
-          tabBarIcon: ({ size, color }) => (
-            <Home size={size} color={color} />
-          ),
+          title: 'Phim',
+          tabBarIcon: ({ color }) => <Film size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="tickets"
         options={{
           title: 'Vé của tôi',
-          tabBarIcon: ({ size, color }) => (
-            <Ticket size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Ticket size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="offers"
         options={{
           title: 'Ưu đãi',
-          tabBarIcon: ({ size, color }) => (
-            <Gift size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <Gift size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chatbot"
+        options={{
+          title: 'Trợ lý AI',
+          tabBarIcon: ({ color }) => <MessageSquare size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Tài khoản',
-          tabBarIcon: ({ size, color }) => (
-            <User size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <User size={24} color={color} />,
         }}
       />
     </Tabs>

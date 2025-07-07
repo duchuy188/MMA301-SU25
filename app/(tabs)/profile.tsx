@@ -1,5 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Crown, Star, Ticket, Gift, Settings, Bell, Shield, LogOut } from 'lucide-react-native';
+import { router, useFocusEffect } from 'expo-router';
+import Toast from 'react-native-toast-message';
+import { useState, useEffect, useCallback } from 'react';
+import { logout, getProfile } from '../../services/auth';
 
 const recentTickets = [
   {
@@ -17,20 +21,103 @@ const recentTickets = [
 ];
 
 export default function ProfileScreen() {
+  const [userProfile, setUserProfile] = useState({
+    name: 'Đang tải...',
+    email: '',
+    phone: '',
+    avatar: null,
+    role: 'member',
+    status: true
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Lấy thông tin profile khi màn hình được tải
+  useEffect(() => {
+    loadUserProfile();
+  }, []);
+
+  const loadUserProfile = async () => {
+    try {
+      setLoading(true);
+      const data = await getProfile();
+      setUserProfile(data.user || data); // Tùy vào cấu trúc API response
+      setLoading(false);
+    } catch (error) {
+      console.log('Lỗi khi tải thông tin người dùng:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể tải thông tin',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+      setLoading(false);
+    }
+  };
+
+  // Sử dụng useFocusEffect để tải lại dữ liệu mỗi khi màn hình được focus
+  useFocusEffect(
+    useCallback(() => {
+      loadUserProfile();
+    }, [])
+  );
+
+  // Xử lý đăng xuất với xác nhận
+  const handleLogout = () => {
+    Alert.alert(
+      "Đăng xuất",
+      "Bạn có chắc chắn muốn đăng xuất?",
+      [
+        {
+          text: "Hủy",
+          style: "cancel"
+        },
+        { 
+          text: "Đăng xuất", 
+          onPress: () => {
+            try {
+              logout();
+            } catch (error) {
+              console.log('Lỗi khi đăng xuất:', error);
+            }
+            
+            router.replace('/auth');
+            
+            setTimeout(() => {
+              Toast.show({
+                type: 'success',
+                text1: 'Đăng xuất thành công',
+                visibilityTime: 2000,
+              });
+            }, 100);
+          },
+          style: "destructive"
+        }
+      ]
+    );
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <Image
-            source={{ uri: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150' }}
-            style={styles.avatar}
-          />
-          <View style={styles.goldRing} />
+          <TouchableOpacity onPress={() => router.push('/edit-profile')}>
+            <Image
+              source={{ 
+                uri: userProfile.avatar 
+                  ? userProfile.avatar 
+                  : 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150' 
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.goldRing} />
+          </TouchableOpacity>
         </View>
-        <Text style={styles.userName}>Nguyễn Văn A</Text>
+        <Text style={styles.userName}>{userProfile.name}</Text>
         <View style={styles.membershipBadge}>
           <Crown size={16} color="#000000" />
-          <Text style={styles.membershipText}>Thành viên Vàng</Text>
+          <Text style={styles.membershipText}>
+            {userProfile.role === 'admin' ? 'Quản trị viên' : 'Thành viên Vàng'}
+          </Text>
         </View>
       </View>
 
@@ -89,21 +176,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Nâng cấp thành viên</Text>
-        <TouchableOpacity style={styles.upgradeCard}>
-          <View style={styles.upgradeIcon}>
-            <Crown size={24} color="#FFD700" />
-          </View>
-          <View style={styles.upgradeContent}>
-            <Text style={styles.upgradeTitle}>NÂNG CẤP HẠNG VIP</Text>
-            <Text style={styles.upgradeDescription}>
-              Trở thành thành viên Bạch Kim để nhận nhiều ưu đãi độc quyền
-            </Text>
-          </View>
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.menuSection}>
         <TouchableOpacity style={styles.menuItem}>
           <Bell size={20} color="#FFD700" />
@@ -117,7 +189,7 @@ export default function ProfileScreen() {
           <Shield size={20} color="#FFD700" />
           <Text style={styles.menuText}>Chính sách bảo mật</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
           <LogOut size={20} color="#FF4444" />
           <Text style={[styles.menuText, { color: '#FF4444' }]}>Đăng xuất</Text>
         </TouchableOpacity>
@@ -295,38 +367,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000000',
   },
-  upgradeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1A1A',
-    padding: 20,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#FFD700',
-    shadowColor: '#FFD700',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  upgradeIcon: {
-    marginRight: 16,
-  },
-  upgradeContent: {
-    flex: 1,
-  },
-  upgradeTitle: {
-    fontFamily: 'PlayfairDisplay-Bold',
-    fontSize: 16,
-    color: '#FFD700',
-    marginBottom: 6,
-  },
-  upgradeDescription: {
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 12,
-    color: '#999',
-    lineHeight: 16,
-  },
   menuSection: {
     paddingHorizontal: 20,
     paddingBottom: 40,
@@ -343,5 +383,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     marginLeft: 16,
+  },
+  avatarEditIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#FFD700',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#000000',
   },
 });

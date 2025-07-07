@@ -2,6 +2,8 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 
 import { useState } from 'react';
 import { router } from 'expo-router';
 import { Film, Eye, EyeOff } from 'lucide-react-native';
+import { login, register } from '../services/auth';
+import Toast from 'react-native-toast-message';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -9,9 +11,142 @@ export default function AuthScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [acceptTerms, setAcceptTerms] = useState(false);
+  
+  // State cho đăng nhập
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  
+  // State cho đăng ký
+  const [fullName, setFullName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [registerLoading, setRegisterLoading] = useState(false);
 
-  const handleAuth = () => {
-    router.replace('/(tabs)');
+  // Xử lý đăng nhập
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Toast.show({
+        type: 'error',
+        text1: 'Đăng nhập thất bại',
+        text2: 'Vui lòng nhập đầy đủ email và mật khẩu',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await login(email, password);
+      // Chuyển hướng sau khi đăng nhập thành công
+      Toast.show({
+        type: 'success',
+        text1: 'Đăng nhập thành công',
+        visibilityTime: 2000,
+      });
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      let errorMessage = 'Email hoặc mật khẩu không đúng. Vui lòng thử lại.';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        // Không hiển thị tên lỗi kỹ thuật
+        if (error.message.includes('Network Error')) {
+          errorMessage = 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối mạng.';
+        }
+      }
+      
+      Toast.show({
+        type: 'error',
+        text1: 'Đăng nhập thất bại',
+        text2: errorMessage,
+        visibilityTime: 4000,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Xử lý đăng ký
+  const handleSignUp = async () => {
+    if (!fullName || !registerEmail || !phone || !registerPassword || !confirmPassword) {
+      Toast.show({
+        type: 'error',
+        text1: 'Lỗi',
+        text2: 'Vui lòng điền đầy đủ thông tin',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+    
+    if (registerPassword !== confirmPassword) {
+      Toast.show({
+        type: 'error',
+        text1: 'Lỗi',
+        text2: 'Mật khẩu xác nhận không khớp',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+    
+    if (!acceptTerms) {
+      Toast.show({
+        type: 'error',
+        text1: 'Lỗi',
+        text2: 'Vui lòng đồng ý với điều khoản và điều kiện',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    setRegisterLoading(true);
+    try {
+      const response = await register(fullName, registerEmail, phone, registerPassword);
+      
+      // Xóa dữ liệu form đăng ký
+      const tempEmail = registerEmail; // Lưu lại email để điền vào form đăng nhập
+      
+      setFullName('');
+      setRegisterEmail('');
+      setPhone('');
+      setRegisterPassword('');
+      setConfirmPassword('');
+      setAcceptTerms(false);
+      
+      // Chuyển về màn hình đăng nhập ngay lập tức
+      setIsSignUp(false);
+      setEmail(tempEmail);
+      
+      // Sau đó hiển thị Toast thông báo thành công
+      Toast.show({
+        type: 'success',
+        text1: 'Đăng ký thành công',
+        text2: 'Tài khoản của bạn đã được tạo thành công',
+        visibilityTime: 3000,
+      });
+    } catch (error: any) {
+      let errorMessage = 'Đã xảy ra lỗi khi đăng ký. Vui lòng thử lại.';
+      
+      if (error.response && error.response.data) {
+        if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status === 409) {
+          errorMessage = 'Email đã được sử dụng. Vui lòng sử dụng email khác.';
+        }
+      }
+      
+      Toast.show({
+        type: 'error',
+        text1: 'Đăng ký thất bại',
+        text2: errorMessage,
+        visibilityTime: 4000,
+      });
+    } finally {
+      setRegisterLoading(false);
+    }
   };
 
   if (isSignUp) {
@@ -28,18 +163,24 @@ export default function AuthScreen() {
             style={styles.input}
             placeholder="Họ và Tên"
             placeholderTextColor="#666"
+            value={fullName}
+            onChangeText={setFullName}
           />
           <TextInput
             style={styles.input}
             placeholder="Email"
             placeholderTextColor="#666"
             keyboardType="email-address"
+            value={registerEmail}
+            onChangeText={setRegisterEmail}
           />
           <TextInput
             style={styles.input}
             placeholder="Số điện thoại"
             placeholderTextColor="#666"
             keyboardType="phone-pad"
+            value={phone}
+            onChangeText={setPhone}
           />
           <View style={styles.passwordContainer}>
             <TextInput
@@ -47,6 +188,8 @@ export default function AuthScreen() {
               placeholder="Mật khẩu"
               placeholderTextColor="#666"
               secureTextEntry={!showPassword}
+              value={registerPassword}
+              onChangeText={setRegisterPassword}
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -61,6 +204,8 @@ export default function AuthScreen() {
               placeholder="Xác nhận mật khẩu"
               placeholderTextColor="#666"
               secureTextEntry={!showConfirmPassword}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -82,8 +227,14 @@ export default function AuthScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={handleAuth}>
-            <Text style={styles.primaryButtonText}>Đăng ký</Text>
+          <TouchableOpacity 
+            style={[styles.primaryButton, registerLoading && styles.disabledButton]} 
+            onPress={handleSignUp}
+            disabled={registerLoading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {registerLoading ? 'Đang xử lý...' : 'Đăng ký'}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -99,6 +250,7 @@ export default function AuthScreen() {
     );
   }
 
+  // Phần đăng nhập giữ nguyên
   return (
     <View style={styles.container}>
       <View style={styles.content}>
@@ -114,6 +266,8 @@ export default function AuthScreen() {
             placeholder="Email"
             placeholderTextColor="#666"
             keyboardType="email-address"
+            value={email}
+            onChangeText={setEmail}
           />
           <View style={styles.passwordContainer}>
             <TextInput
@@ -121,6 +275,8 @@ export default function AuthScreen() {
               placeholder="Mật khẩu"
               placeholderTextColor="#666"
               secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
             />
             <TouchableOpacity
               style={styles.eyeIcon}
@@ -140,13 +296,19 @@ export default function AuthScreen() {
               </View>
               <Text style={styles.checkboxText}>Ghi nhớ tôi</Text>
             </TouchableOpacity>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push('/forgot-password')}>
               <Text style={styles.linkTextGold}>Quên mật khẩu?</Text>
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.primaryButton} onPress={handleAuth}>
-            <Text style={styles.primaryButtonText}>Đăng nhập</Text>
+          <TouchableOpacity 
+            style={[styles.primaryButton, loading && styles.disabledButton]} 
+            onPress={handleLogin}
+            disabled={loading}
+          >
+            <Text style={styles.primaryButtonText}>
+              {loading ? 'Đang xử lý...' : 'Đăng nhập'}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -163,6 +325,7 @@ export default function AuthScreen() {
   );
 }
 
+// Styles giữ nguyên
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -278,5 +441,9 @@ const styles = StyleSheet.create({
   linkTextGold: {
     color: '#FFD700',
     fontFamily: 'Montserrat-Medium',
+  },
+  disabledButton: {
+    backgroundColor: '#A89347',
+    opacity: 0.7,
   },
 });
