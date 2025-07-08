@@ -1,24 +1,56 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Crown, Monitor } from 'lucide-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getSeatsByScreeningId } from '../services/seat';
+import { createBooking } from '../services/booking';
+import { useLocalSearchParams } from 'expo-router';
+import { getScreeningById } from '../services/screening';
+import { getMovieById } from '../services/movie';
+import { getTheaterById } from '../services/theater';
 
-const seatMap = [
-  ['A1', 'A2', 'A3', 'A4', 'A5', '', 'A6', 'A7', 'A8', 'A9', 'A10'],
-  ['B1', 'B2', 'B3', 'B4', 'B5', '', 'B6', 'B7', 'B8', 'B9', 'B10'],
-  ['C1', 'C2', 'C3', 'C4', 'C5', '', 'C6', 'C7', 'C8', 'C9', 'C10'],
-  ['D1', 'D2', 'D3', 'D4', 'D5', '', 'D6', 'D7', 'D8', 'D9', 'D10'],
-  ['E1', 'E2', 'E3', 'E4', 'E5', '', 'E6', 'E7', 'E8', 'E9', 'E10'],
-  ['F1', 'F2', 'F3', 'F4', 'F5', '', 'F6', 'F7', 'F8', 'F9', 'F10'],
-  ['G1', 'G2', 'G3', 'G4', 'G5', '', 'G6', 'G7', 'G8', 'G9', 'G10'],
-  ['H1', 'H2', 'H3', 'H4', 'H5', '', 'H6', 'H7', 'H8', 'H9', 'H10'],
-];
-
-const occupiedSeats = ['A1', 'A2', 'B5', 'C3', 'D7', 'E8', 'F4', 'G9', 'H2'];
-const vipSeats = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'G1', 'G2', 'G3', 'G4', 'G5', 'G6', 'G7', 'G8', 'G9', 'G10'];
+const seatMap = Array.from({ length: 8 }, (_, rowIdx) =>
+  Array.from({ length: 8 }, (_, colIdx) =>
+    String.fromCharCode(65 + rowIdx) + (colIdx + 1)
+  )
+);
 
 export default function SeatSelectionScreen() {
+  const params = useLocalSearchParams();
+  console.log('params:', params);
+  const { screeningId } = params;
+  const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
+  const [vipSeats, setVipSeats] = useState<string[]>([]);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [pendingSeats, setPendingSeats] = useState<string[]>([]);
+  const [ticketPrice, setTicketPrice] = useState<number>(0);
+  const [screening, setScreening] = useState<any>(null);
+  const [theater, setTheater] = useState<any>(null);
+  const [movie, setMovie] = useState<any>(null);
+
+  useEffect(() => {
+    if (!screeningId) return;
+    // Lấy thông tin screening
+    const fetchScreening = async () => {
+      const screeningData = await getScreeningById(screeningId as string);
+      if (!screeningData) return;
+      setScreening(screeningData);
+      setTicketPrice(screeningData.ticketPrice || screeningData.price);
+      // Lấy thông tin phim và rạp
+      const movieData = await getMovieById(screeningData.movieId);
+      setMovie(movieData);
+      const theaterData = await getTheaterById(screeningData.theaterId);
+      setTheater(theaterData);
+    };
+    fetchScreening();
+    const fetchSeats = async () => {
+      const seats = await getSeatsByScreeningId(screeningId as string);
+      setOccupiedSeats(seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber));
+      setVipSeats(seats.filter(s => s.type === 'vip').map(s => s.seatNumber));
+      setPendingSeats(seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber));
+    };
+    fetchSeats();
+  }, [screeningId]);
 
   const handleSeatSelect = (seatId: string) => {
     if (occupiedSeats.includes(seatId)) return;
@@ -34,6 +66,9 @@ export default function SeatSelectionScreen() {
     if (occupiedSeats.includes(seatId)) {
       return [styles.seat, styles.seatOccupied];
     }
+    if (pendingSeats.includes(seatId)) {
+      return [styles.seat, styles.seatPending];
+    }
     if (selectedSeats.includes(seatId)) {
       return [styles.seat, styles.seatSelected];
     }
@@ -43,22 +78,33 @@ export default function SeatSelectionScreen() {
     return [styles.seat, styles.seatAvailable];
   };
 
-  const handleContinue = () => {
-    if (selectedSeats.length > 0) {
-      router.push({
-        pathname: '/payment',
-        params: { seats: selectedSeats.join(',') },
-      });
+  const handleContinue = async () => {
+    if (selectedSeats.length > 0 && screening && movie && theater) {
+      try {
+        const total = selectedSeats.length * ticketPrice;
+        router.push({
+          pathname: '/payment',
+          params: {
+            movie: movie.title,
+            cinema: theater.name,
+            date: screening.startTime ? screening.startTime.slice(0, 10) : '',
+            time: screening.startTime ? screening.startTime.slice(11, 16) : '',
+            seats: selectedSeats.join(','),
+            ticketPrice: ticketPrice.toString(),
+            serviceFee: '20000', // Nếu có phí dịch vụ, thay bằng biến động
+            total: total.toString(),
+            screeningId: screening._id,
+          },
+        });
+      } catch (error) {
+        alert('Có lỗi xảy ra khi chuyển sang thanh toán.');
+      }
     }
   };
 
   const calculateTotal = () => {
-    const regularPrice = 120000;
-    const vipPrice = 200000;
-    
-    return selectedSeats.reduce((total, seat) => {
-      return total + (vipSeats.includes(seat) ? vipPrice : regularPrice);
-    }, 0);
+    // Nếu có ghế VIP, bạn có thể cộng thêm phụ phí nếu muốn
+    return selectedSeats.length * ticketPrice;
   };
 
   return (
@@ -109,23 +155,18 @@ export default function SeatSelectionScreen() {
           ))}
         </View>
 
-        <View style={styles.vipSection}>
-          <View style={styles.vipBorder} />
-          <Text style={styles.vipSectionLabel}>KHU VỰC VIP</Text>
-        </View>
-
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendSeat, styles.seatAvailable]} />
             <Text style={styles.legendText}>Ghế trống</Text>
           </View>
           <View style={styles.legendItem}>
-            <View style={[styles.legendSeat, styles.seatVIP]} />
-            <Text style={styles.legendText}>Ghế VIP</Text>
-          </View>
-          <View style={styles.legendItem}>
             <View style={[styles.legendSeat, styles.seatSelected]} />
             <Text style={styles.legendText}>Đã chọn</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendSeat, styles.seatPending]} />
+            <Text style={styles.legendText}>Ghế đang đặt</Text>
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.legendSeat, styles.seatOccupied]} />
@@ -364,5 +405,10 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Bold',
     fontSize: 16,
     color: '#000000',
+  },
+  seatPending: {
+    backgroundColor: '#FF9800', // orange for pending
+    borderWidth: 1,
+    borderColor: '#FF9800',
   },
 });

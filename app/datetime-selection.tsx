@@ -1,7 +1,8 @@
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Calendar, Clock } from 'lucide-react-native';
-import { useState } from 'react';
+import { getPublicScreenings, Screening } from '../services/screening';
 
 const dates = [
   { id: '1', date: '20', day: 'Thứ 2', month: 'Th12', isToday: false },
@@ -26,16 +27,70 @@ const timeSlots = [
 ];
 
 export default function DateTimeSelectionScreen() {
-  const [selectedDate, setSelectedDate] = useState('3');
+  const { theaterId } = useLocalSearchParams();
+  const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
+  const [screenings, setScreenings] = useState<Screening[]>([]);
+  const [dateOptions, setDateOptions] = useState<{ id: string, date: string, day: string, month: string, isToday: boolean, raw: Date }[]>([]);
+
+  // useEffect fetch screenings và set dateOptions
+  useEffect(() => {
+    const fetchScreenings = async () => {
+      const data = await getPublicScreenings(theaterId ? { theaterId: String(theaterId) } : undefined);
+      setScreenings(data);
+
+      // Tạo 5 ngày liên tiếp từ hôm nay
+      const today = new Date();
+      today.setUTCHours(0,0,0,0);
+      const fiveDates = Array.from({ length: 5 }, (_, i) => {
+        const d = new Date(today);
+        d.setUTCHours(0,0,0,0);
+        d.setUTCDate(d.getUTCDate() + i);
+        const dayOfWeek = ['CN','Th2','Th3','Th4','Th5','Th6','Th7'][d.getUTCDay()];
+        return {
+          id: d.toISOString().slice(0,10), // luôn là YYYY-MM-DD UTC
+          date: d.getUTCDate().toString().padStart(2,'0'),
+          day: dayOfWeek,
+          month: `Th${d.getUTCMonth()+1}`,
+          isToday: i === 0,
+          raw: d,
+        };
+      });
+      setDateOptions(fiveDates);
+    };
+    fetchScreenings();
+  }, [theaterId]);
+
+  // useEffect set selectedDate khi dateOptions hoặc screenings đổi
+  useEffect(() => {
+    if (dateOptions.length === 0) return;
+    // Nếu selectedDate chưa có hoặc không còn hợp lệ
+    if (!selectedDate || !dateOptions.some(d => d.id === selectedDate)) {
+      // Tìm ngày có suất chiếu gần nhất
+      const availableDate = dateOptions.find(d =>
+        screenings.some(s => s.startTime.slice(0,10) === d.id)
+      );
+      setSelectedDate(availableDate ? availableDate.id : dateOptions[0].id);
+    }
+  }, [dateOptions, screenings]);
+
+  const filteredTimeSlots = screenings
+    .filter(s => s.startTime.slice(0,10) === selectedDate)
+    .map((s, idx) => ({
+      id: s._id,
+      time: new Date(s.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      available: true, // Có thể thêm logic kiểm tra hết vé nếu có
+      isVIP: false, // Có thể thêm logic VIP nếu có
+      screening: s,
+    }));
 
   const handleTimeSelect = (timeSlot: any) => {
     if (timeSlot.available) {
       setSelectedTime(timeSlot.id);
       router.push({
         pathname: '/seat-selection',
-        params: { 
-          timeSlotId: timeSlot.id,
+        params: {
+          screeningId: timeSlot.id,
           dateId: selectedDate,
         },
       });
@@ -50,7 +105,6 @@ export default function DateTimeSelectionScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Chọn ngày & giờ</Text>
       </View>
-
       <ScrollView style={styles.content}>
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -58,7 +112,7 @@ export default function DateTimeSelectionScreen() {
             <Text style={styles.sectionTitle}>Chọn ngày</Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dateScroll}>
-            {dates.map((date) => (
+            {dateOptions.map((date) => (
               <TouchableOpacity
                 key={date.id}
                 style={[
@@ -70,22 +124,22 @@ export default function DateTimeSelectionScreen() {
               >
                 <Text style={[
                   styles.dateNumber,
-                  selectedDate === date.id && styles.dateNumberSelected,
                   date.isToday && styles.dateNumberToday,
+                  selectedDate === date.id && styles.dateNumberSelected,
                 ]}>
                   {date.date}
                 </Text>
                 <Text style={[
                   styles.dateDay,
-                  selectedDate === date.id && styles.dateDaySelected,
                   date.isToday && styles.dateDayToday,
+                  selectedDate === date.id && styles.dateDaySelected,
                 ]}>
                   {date.day}
                 </Text>
                 <Text style={[
                   styles.dateMonth,
-                  selectedDate === date.id && styles.dateMonthSelected,
                   date.isToday && styles.dateMonthToday,
+                  selectedDate === date.id && styles.dateMonthSelected,
                 ]}>
                   {date.month}
                 </Text>
@@ -98,42 +152,44 @@ export default function DateTimeSelectionScreen() {
             ))}
           </ScrollView>
         </View>
-
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Clock size={20} color="#FFD700" />
             <Text style={styles.sectionTitle}>Chọn suất chiếu</Text>
           </View>
           <View style={styles.timeSlotContainer}>
-            {timeSlots.map((timeSlot) => (
-              <TouchableOpacity
-                key={timeSlot.id}
-                style={[
-                  styles.timeSlot,
-                  !timeSlot.available && styles.timeSlotDisabled,
-                  timeSlot.isVIP && styles.timeSlotVIP,
-                  selectedTime === timeSlot.id && styles.timeSlotSelected,
-                ]}
-                onPress={() => handleTimeSelect(timeSlot)}
-                disabled={!timeSlot.available}
-              >
-                <Text style={[
-                  styles.timeSlotText,
-                  !timeSlot.available && styles.timeSlotTextDisabled,
-                  selectedTime === timeSlot.id && styles.timeSlotTextSelected,
-                ]}>
-                  {timeSlot.time}
-                </Text>
-                {timeSlot.isVIP && (
-                  <View style={styles.vipIndicator}>
-                    <Text style={styles.vipIndicatorText}>VIP</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+            {filteredTimeSlots.length === 0 ? (
+              <Text style={{ color: '#fff', marginTop: 10 }}>Không có suất chiếu cho ngày này.</Text>
+            ) : (
+              filteredTimeSlots.map((timeSlot) => (
+                <TouchableOpacity
+                  key={timeSlot.id}
+                  style={[
+                    styles.timeSlot,
+                    !timeSlot.available && styles.timeSlotDisabled,
+                    timeSlot.isVIP && styles.timeSlotVIP,
+                    selectedTime === timeSlot.id && styles.timeSlotSelected,
+                  ]}
+                  onPress={() => handleTimeSelect(timeSlot)}
+                  disabled={!timeSlot.available}
+                >
+                  <Text style={[
+                    styles.timeSlotText,
+                    !timeSlot.available && styles.timeSlotTextDisabled,
+                    selectedTime === timeSlot.id && styles.timeSlotTextSelected,
+                  ]}>
+                    {timeSlot.time}
+                  </Text>
+                  {timeSlot.isVIP && (
+                    <View style={styles.vipIndicator}>
+                      <Text style={styles.vipIndicatorText}>VIP</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
           </View>
         </View>
-
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendColor, { backgroundColor: '#FFD700' }]} />

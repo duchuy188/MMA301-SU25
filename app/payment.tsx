@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode } from 'lucide-react-native';
 import { useState } from 'react';
+import { createBooking } from '../services/booking';
 
 const paymentMethods = [
   {
@@ -38,8 +39,22 @@ export default function PaymentScreen() {
     total: 420000,
   };
 
-  const handlePayment = () => {
-    router.push('/e-ticket');
+  const handlePayment = async () => {
+    try {
+      // Dữ liệu mẫu, cần thay bằng dữ liệu thực tế khi tích hợp thật
+      const bookingData = {
+        screeningId: 'sample_screening_id', // Thay bằng id thực tế khi có
+        seatNumbers: ticketInfo.seats,
+      };
+      const booking = await createBooking(bookingData);
+      if (booking) {
+        router.push('/e-ticket');
+      } else {
+        Alert.alert('Lỗi', 'Đặt vé không thành công. Vui lòng thử lại.');
+      }
+    } catch (error) {
+      Alert.alert('Lỗi', 'Đã xảy ra lỗi khi thanh toán.');
+    }
   };
 
   return (
