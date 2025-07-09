@@ -31,22 +31,33 @@ export const getBookings = async (filters?: {
 export const createBooking = async (data: {
   screeningId: string;
   seatNumbers: string[];
-  code?: string;
+  code?: string | null; // Cho phép null
+  promotionCode?: string | null; // Cho phép null
+  [key: string]: any; // Cho phép các trường khác
 }): Promise<Booking | null> => {
   try {
-    console.log('Creating booking with data:', data);
+    console.log('createBooking: Sending request with data:', JSON.stringify(data, null, 2));
     const response = await api.post('/bookings', data);
-    console.log('Booking API response:', response.data);
+    console.log('createBooking: Response received:', response.data);
+    console.log('createBooking: Response status:', response.status);
     return response.data.data || null;
   } catch (error: any) {
-    console.error('Error creating booking:', error);
-    console.error('Error response:', error.response?.data);
-    console.error('Error status:', error.response?.status);
-    console.error('Error message:', error.message);
+    console.error('createBooking: Error occurred:', error);
+    console.error('createBooking: Error response data:', error.response?.data);
+    console.error('createBooking: Error status:', error.response?.status);
+    console.error('createBooking: Error message:', error.message);
+    console.error('createBooking: Request payload was:', JSON.stringify(data, null, 2));
+    
+    // Log thêm chi tiết về headers và config
+    console.error('createBooking: Request headers:', error.config?.headers);
+    console.error('createBooking: Request URL:', error.config?.url);
     
     // Throw error để component có thể catch và hiển thị lỗi cụ thể
-    if (error.response?.data?.message) {
-      throw new Error(error.response.data.message);
+    const backendMessage = error.response?.data?.message;
+    console.log('createBooking: Backend error message:', backendMessage);
+    
+    if (backendMessage) {
+      throw new Error(backendMessage);
     } else {
       throw new Error('Không thể tạo booking. Vui lòng thử lại.');
     }
