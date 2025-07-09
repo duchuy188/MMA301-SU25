@@ -1,9 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Crown, Monitor } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { getSeatsByScreeningId } from '../services/seat';
-import { createBooking } from '../services/booking';
+import { createBooking, getBookings } from '../services/booking';
 import { useLocalSearchParams } from 'expo-router';
 import { getScreeningById } from '../services/screening';
 import { getMovieById } from '../services/movie';
@@ -14,6 +14,18 @@ const seatMap = Array.from({ length: 8 }, (_, rowIdx) =>
     String.fromCharCode(65 + rowIdx) + (colIdx + 1)
   )
 );
+
+// Helper function to extract ID from object or string
+const extractId = (idOrObject: string | { _id: string } | any): string => {
+  if (typeof idOrObject === 'string') {
+    return idOrObject;
+  }
+  if (typeof idOrObject === 'object' && idOrObject?._id) {
+    return idOrObject._id;
+  }
+  console.warn('Invalid ID format:', idOrObject);
+  return '';
+};
 
 export default function SeatSelectionScreen() {
   const params = useLocalSearchParams();
@@ -27,27 +39,96 @@ export default function SeatSelectionScreen() {
   const [screening, setScreening] = useState<any>(null);
   const [theater, setTheater] = useState<any>(null);
   const [movie, setMovie] = useState<any>(null);
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
 
   useEffect(() => {
     if (!screeningId) return;
+    
     // Lấy thông tin screening
     const fetchScreening = async () => {
       const screeningData = await getScreeningById(screeningId as string);
       if (!screeningData) return;
+      console.log('screeningData:', screeningData);
       setScreening(screeningData);
       setTicketPrice(screeningData.ticketPrice || screeningData.price);
+      
       // Lấy thông tin phim và rạp
-      const movieData = await getMovieById(screeningData.movieId);
-      setMovie(movieData);
-      const theaterData = await getTheaterById(screeningData.theaterId);
-      setTheater(theaterData);
+      // Extract the actual IDs using helper function
+      const movieId = extractId(screeningData.movieId);
+      const theaterId = extractId(screeningData.theaterId);
+      
+      console.log('Extracted movieId:', movieId);
+      console.log('Extracted theaterId:', theaterId);
+      
+      if (movieId) {
+        try {
+          const movieData = await getMovieById(movieId);
+          setMovie(movieData);
+        } catch (error) {
+          console.error('Error fetching movie:', error);
+          // Set a default movie object to prevent crashes
+          setMovie({ title: 'Không xác định', _id: movieId });
+        }
+      }
+      
+      if (theaterId) {
+        try {
+          const theaterData = await getTheaterById(theaterId);
+          setTheater(theaterData);
+        } catch (error) {
+          console.error('Error fetching theater:', error);
+          // Set a default theater object to prevent crashes
+          setTheater({ name: 'Không xác định', _id: theaterId });
+        }
+      }
     };
     fetchScreening();
     const fetchSeats = async () => {
-      const seats = await getSeatsByScreeningId(screeningId as string);
-      setOccupiedSeats(seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber));
-      setVipSeats(seats.filter(s => s.type === 'vip').map(s => s.seatNumber));
-      setPendingSeats(seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber));
+      try {
+        console.log('Fetching seats for screening:', screeningId);
+        
+        // Thử lấy từ seat API trước
+        let seats = await getSeatsByScreeningId(screeningId as string);
+        console.log('Raw seats data from seat API:', seats);
+        
+        // Nếu seat API không có dữ liệu, fallback sang booking API
+        if (!seats || seats.length === 0) {
+          console.log('Seat API empty, trying booking API...');
+          const bookings = await getBookings({ screeningId: screeningId as string });
+          console.log('Bookings for this screening:', bookings);
+          
+          // Convert bookings to seat format
+          seats = [];
+          bookings.forEach(booking => {
+            if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+              booking.seatNumbers.forEach(seatNumber => {
+                seats.push({
+                  seatNumber: seatNumber,
+                  status: booking.paymentStatus === 'cancelled' ? 'available' : 
+                          booking.paymentStatus === 'pending' ? 'pending' : 'occupied',
+                  type: 'regular' // Default type
+                });
+              });
+            }
+          });
+          console.log('Converted seats from bookings:', seats);
+        }
+        
+        const occupied = seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber);
+        const vip = seats.filter(s => s.type === 'vip').map(s => s.seatNumber);
+        const pending = seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber);
+        
+        console.log('Final occupied seats:', occupied);
+        console.log('Final VIP seats:', vip);
+        console.log('Final pending seats:', pending);
+        
+        setOccupiedSeats(occupied);
+        setVipSeats(vip);
+        setPendingSeats(pending);
+      } catch (error) {
+        console.error('Error fetching seats:', error);
+        // Continue with empty seat data if there's an error
+      }
     };
     fetchSeats();
   }, [screeningId]);
@@ -80,7 +161,24 @@ export default function SeatSelectionScreen() {
 
   const handleContinue = async () => {
     if (selectedSeats.length > 0 && screening && movie && theater) {
+      setIsCreatingBooking(true);
       try {
+        // Tạo booking với status pending ngay khi chọn ghế
+        const bookingData = {
+          screeningId: screening._id,
+          seatNumbers: selectedSeats,
+        };
+        
+        console.log('Creating pending booking:', bookingData);
+        const pendingBooking = await createBooking(bookingData);
+        
+        if (!pendingBooking) {
+          alert('Không thể tạo booking. Vui lòng thử lại.');
+          return;
+        }
+        
+        console.log('Pending booking created:', pendingBooking);
+        
         const total = selectedSeats.length * ticketPrice;
         router.push({
           pathname: '/payment',
@@ -94,10 +192,14 @@ export default function SeatSelectionScreen() {
             serviceFee: '20000', // Nếu có phí dịch vụ, thay bằng biến động
             total: total.toString(),
             screeningId: screening._id,
+            bookingId: pendingBooking._id,
           },
         });
       } catch (error) {
-        alert('Có lỗi xảy ra khi chuyển sang thanh toán.');
+        console.error('Error in seat selection:', error);
+        alert('Có lỗi xảy ra. Vui lòng thử lại.');
+      } finally {
+        setIsCreatingBooking(false);
       }
     }
   };
@@ -187,10 +289,21 @@ export default function SeatSelectionScreen() {
 
       {selectedSeats.length > 0 && (
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>
-              Tiếp tục ({selectedSeats.length} ghế)
-            </Text>
+          <TouchableOpacity 
+            style={[styles.continueButton, isCreatingBooking && styles.continueButtonDisabled]} 
+            onPress={handleContinue}
+            disabled={isCreatingBooking}
+          >
+            {isCreatingBooking ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#000000" />
+                <Text style={styles.continueButtonText}>Đang tạo booking...</Text>
+              </View>
+            ) : (
+              <Text style={styles.continueButtonText}>
+                Tiếp tục ({selectedSeats.length} ghế)
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -294,8 +407,13 @@ const styles = StyleSheet.create({
   },
   seatSelected: {
     backgroundColor: '#FFD700',
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#FFD700',
+    shadowColor: '#FFD700',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 4,
   },
   seatOccupied: {
     backgroundColor: '#666',
@@ -401,10 +519,19 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
+  continueButtonDisabled: {
+    backgroundColor: '#999',
+    shadowOpacity: 0.1,
+  },
   continueButtonText: {
     fontFamily: 'Montserrat-Bold',
     fontSize: 16,
     color: '#000000',
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   seatPending: {
     backgroundColor: '#FF9800', // orange for pending

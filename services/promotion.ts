@@ -57,3 +57,28 @@ export const getPromotionById = async (id: string): Promise<ApiResponse<Promotio
         throw new Error(error.response?.data?.message || 'Không thể lấy thông tin khuyến mãi');
     } 
 };
+
+// Validate promotion code
+export const validatePromotionCode = async (code: string): Promise<ApiResponse<Promotion>> => {
+    try {
+        await loadAuthTokens();
+        
+        const response = await api.post('/promotions/validate', { code });
+        return response.data;
+    } catch (error: any) {
+        if (error.response?.status === 401) {
+            throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại');
+        }
+        throw new Error(error.response?.data?.message || 'Mã khuyến mãi không hợp lệ');
+    }
+};
+
+// Get active promotions for public use
+export const getActivePromotions = async (): Promise<ApiResponse<Promotion[]>> => {
+    try {
+        const response = await api.get('/promotions/active');
+        return response.data;
+    } catch (error: any) {
+        throw new Error(error.response?.data?.message || 'Không thể lấy danh sách khuyến mãi');
+    }
+};

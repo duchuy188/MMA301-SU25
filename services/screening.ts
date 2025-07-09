@@ -2,8 +2,8 @@ import api from './api';
 
 export interface Screening {
   _id: string;
-  movieId: string;
-  theaterId: string;
+  movieId: string | { _id: string; [key: string]: any };
+  theaterId: string | { _id: string; [key: string]: any };
   startTime: string;
   endTime: string;
   room: string;
