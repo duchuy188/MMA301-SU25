@@ -1,105 +1,279 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { QrCode, Clock, MapPin, Calendar } from 'lucide-react-native';
-
-const tickets = [
-  {
-    id: '1',
-    movie: 'Avengers: Endgame',
-    cinema: 'Galaxy Cinema Nguyễn Du',
-    date: '25/12/2024',
-    time: '19:30',
-    seats: 'F7, F8',
-    status: 'Sắp tới',
-    image: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-  },
-  {
-    id: '2',
-    movie: 'The Batman',
-    cinema: 'Galaxy Cinema Landmark',
-    date: '20/12/2024',
-    time: '21:00',
-    seats: 'G5, G6',
-    status: 'Đã sử dụng',
-    image: 'https://images.pexels.com/photos/7991472/pexels-photo-7991472.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-  },
-  {
-    id: '3',
-    movie: 'Dune: Part Two',
-    cinema: 'Galaxy Cinema Vincom',
-    date: '15/12/2024',
-    time: '16:45',
-    seats: 'H3, H4',
-    status: 'Đã sử dụng',
-    image: 'https://images.pexels.com/photos/7991464/pexels-photo-7991464.jpeg?auto=compress&cs=tinysrgb&w=300&h=400',
-  },
-];
+import { useState, useEffect } from 'react';
+import { router } from 'expo-router';
+import { getUserBookings } from '../../services/booking';
 
 export default function TicketsScreen() {
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  useEffect(() => {
+    fetchUserBookings();
+  }, []);
+
+  const fetchUserBookings = async () => {
+    try {
+      setLoading(true);
+      const userBookings = await getUserBookings();
+      // Filter only paid bookings
+      const paidBookings = (userBookings.bookings || userBookings).filter((b: any) => b.paymentStatus === 'paid');
+      setBookings(paidBookings);
+    } catch (error) {
+      console.error('Error fetching user bookings:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchUserBookings();
+    setRefreshing(false);
+  };
+
+  const formatDate = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const formatTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('vi-VN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getStatusText = (paymentStatus: string, screeningTime: string) => {
+    if (paymentStatus === 'cancelled') return 'Đã hủy';
+    if (paymentStatus === 'pending') return 'Chờ thanh toán';
+    // Không hiển thị trạng thái cho vé đã thanh toán
+    return '';
+  };
+
+  const getStatusStyle = (paymentStatus: string, screeningTime: string) => {
+    const status = getStatusText(paymentStatus, screeningTime);
+    if (status === 'Đã hủy') return styles.cancelledStatus;
+    if (status === 'Chờ thanh toán') return styles.pendingStatus;
+    return styles.usedStatus;
+  };
+
+  const handleTicketPress = (booking: any) => {
+    // Luôn lấy ngày, giờ, rạp từ dữ liệu booking thực tế
+    const startTime = booking?.screeningId?.startTime;
+    const theaterName = booking?.screeningId?.theaterId?.name || 'Rạp không xác định';
+    const movieTitle = booking?.screeningId?.movieId?.title || 'Phim không xác định';
+    const seats = booking.seatNumbers;
+    const screeningId = booking?.screeningId?._id || booking.screeningId;
+    const ticketPrice = booking.totalPrice?.toString() || '90000';
+
+    if (booking.paymentStatus === 'pending') {
+      router.push({
+        pathname: '/payment',
+        params: {
+          bookingId: booking._id,
+          movie: movieTitle,
+          cinema: theaterName,
+          date: startTime,
+          time: startTime,
+          seats: seats.join(','),
+          screeningId: screeningId,
+          ticketPrice: ticketPrice,
+        }
+      });
+    } else if (booking.paymentStatus === 'paid') {
+      // Truyền toàn bộ dữ liệu booking sang e-ticket để lấy QR code và các trường khác
+      router.push({
+        pathname: '/e-ticket',
+        params: {
+          bookingId: booking._id,
+          booking: JSON.stringify(booking),
+        }
+      });
+    }
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(bookings.length / itemsPerPage);
+  const paginatedBookings = bookings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#FFD700" />
+        <Text style={styles.loadingText}>Đang tải vé của bạn...</Text>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#FFD700"
+          colors={['#FFD700']}
+        />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Vé của tôi</Text>
         <Text style={styles.subtitle}>Quản lý vé đã đặt</Text>
       </View>
 
-      <View style={styles.ticketsList}>
-        {tickets.map((ticket) => (
-          <TouchableOpacity key={ticket.id} style={styles.ticketCard}>
-            <View style={styles.ticketContent}>
-              <View style={styles.ticketLeft}>
-                <Image source={{ uri: ticket.image }} style={styles.ticketImage} />
-              </View>
-              
-              <View style={styles.ticketRight}>
-                <View style={styles.ticketHeader}>
-                  <Text style={styles.movieTitle} numberOfLines={1}>
-                    {ticket.movie}
-                  </Text>
-                  <View style={[
-                    styles.statusBadge,
-                    ticket.status === 'Sắp tới' ? styles.statusUpcoming : styles.statusUsed
-                  ]}>
-                    <Text style={styles.statusText}>{ticket.status}</Text>
+      {bookings.length === 0 ? (
+        <View style={styles.emptyState}>
+          <QrCode size={64} color="#666" />
+          <Text style={styles.emptyTitle}>Chưa có vé nào</Text>
+          <Text style={styles.emptyText}>
+            Hãy đặt vé xem phim để trải nghiệm những bộ phim tuyệt vời nhất!
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.ticketsList}>
+          {paginatedBookings.map((booking) => {
+            const movieTitle = booking?.screeningId?.movieId?.title || 
+                              booking?.screeningId?.movieId?.vietnameseTitle || 
+                              'Phim không xác định';
+            const theaterName =
+              booking?.screeningId?.theaterId?.name ||
+              booking?.screeningId?.theaterName ||
+              booking?.theaterName ||
+              booking?.screeningId?.roomId?.theaterName ||
+              'Rạp không xác định';
+            const startTime = booking?.screeningId?.startTime || new Date().toISOString();
+            const roomName = booking?.screeningId?.room || booking?.screeningId?.roomId?.name || 'Phòng không xác định';
+            const bookingCode = booking._id;
+            const bookingDate = booking.createdAt;
+
+            return (
+              <TouchableOpacity 
+                key={booking._id} 
+                style={styles.ticketCard}
+                onPress={() => handleTicketPress(booking)}
+              >
+                <View style={styles.ticketContent}>
+                  <View style={styles.ticketLeft}>
+                    {/* Đã xóa hình ảnh poster phim theo yêu cầu */}
+                  </View>
+                  <View style={styles.ticketRight}>
+                    <View style={styles.ticketHeader}>
+                      <Text style={styles.movieTitle} numberOfLines={1}>
+                        {movieTitle}
+                      </Text>
+                      {/* Ẩn badge trạng thái nếu không có status */}
+                      {getStatusText(booking.paymentStatus, startTime) ? (
+                        <View style={[
+                          styles.statusBadge,
+                          getStatusStyle(booking.paymentStatus, startTime)
+                        ]}>
+                          <Text style={styles.statusText}>
+                            {getStatusText(booking.paymentStatus, startTime)}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    <View style={styles.ticketDetails}>
+                      <View style={styles.detailRow}>
+                        <MapPin size={14} color="#666" />
+                        <Text style={styles.seatText} numberOfLines={1}>
+                          {theaterName}
+                        </Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Calendar size={14} color="#666" />
+                        <Text style={styles.seatText}>{formatDate(startTime)}</Text>
+                        <Clock size={14} color="#666" />
+                        <Text style={styles.seatText}>{formatTime(startTime)}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Ghế:</Text>
+                        <Text style={styles.seatText}>{booking.seatNumbers.join(', ')}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Phòng:</Text>
+                        <Text style={styles.seatText}>{roomName}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Mã vé:</Text>
+                        <Text style={styles.seatText}>{bookingCode}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Ngày đặt:</Text>
+                        <Text style={styles.seatText}>{bookingDate ? formatDate(bookingDate) + ' ' + formatTime(bookingDate) : 'N/A'}</Text>
+                      </View>
+                    </View>
+
+                    {booking.paymentStatus === 'pending' && (
+                      <TouchableOpacity 
+                        style={styles.payButton}
+                        onPress={() => handleTicketPress(booking)}
+                      >
+                        <Text style={styles.payButtonText}>Hoàn tất thanh toán</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    {booking.paymentStatus === 'paid' && (
+                      <TouchableOpacity 
+                        style={styles.qrButton}
+                        onPress={() => router.push({
+                          pathname: '/historyticket',
+                          params: {
+                            booking: JSON.stringify(booking),
+                          }
+                        })}
+                      >
+                        <QrCode size={16} color="#000000" />
+                        <Text style={styles.qrButtonText}>Xem mã QR</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
-
-                <View style={styles.ticketDetails}>
-                  <View style={styles.detailRow}>
-                    <MapPin size={14} color="#666" />
-                    <Text style={styles.detailText} numberOfLines={1}>
-                      {ticket.cinema}
-                    </Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Calendar size={14} color="#666" />
-                    <Text style={styles.detailText}>{ticket.date}</Text>
-                    <Clock size={14} color="#666" />
-                    <Text style={styles.detailText}>{ticket.time}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <Text style={styles.seatLabel}>Ghế:</Text>
-                    <Text style={styles.seatText}>{ticket.seats}</Text>
-                  </View>
-                </View>
-
-                {ticket.status === 'Sắp tới' && (
-                  <TouchableOpacity style={styles.qrButton}>
-                    <QrCode size={16} color="#000000" />
-                    <Text style={styles.qrButtonText}>Xem mã QR</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <View style={styles.emptyState}>
-        <Text style={styles.emptyTitle}>Không có vé nào khác</Text>
-        <Text style={styles.emptySubtitle}>
-          Hãy đặt vé xem phim để trải nghiệm những bộ phim tuyệt vời nhất!
-        </Text>
-      </View>
+              </TouchableOpacity>
+            );
+          })}
+          {/* Pagination controls */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16, gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1, padding: 8 }}
+            >
+              <Text style={{ color: '#FFD700', fontFamily: 'Montserrat-SemiBold', fontSize: 16 }}>{'<'}</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#FFD700', fontFamily: 'Montserrat-SemiBold', fontSize: 14 }}>
+              {currentPage} / {totalPages}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              style={{ opacity: currentPage === totalPages ? 0.5 : 1, padding: 8 }}
+            >
+              <Text style={{ color: '#FFD700', fontFamily: 'Montserrat-SemiBold', fontSize: 16 }}>{'>'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -147,12 +321,6 @@ const styles = StyleSheet.create({
   },
   ticketLeft: {
     marginRight: 15,
-  },
-  ticketImage: {
-    width: 60,
-    height: 80,
-    borderRadius: 8,
-    resizeMode: 'cover',
   },
   ticketRight: {
     flex: 1,
@@ -225,6 +393,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#000000',
   },
+  payButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFA500',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  payButtonText: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 12,
+    color: '#000000',
+  },
   emptyState: {
     alignItems: 'center',
     paddingHorizontal: 40,
@@ -242,5 +425,36 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  emptyText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // New styles for API integration
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginTop: 16,
+  },
+  cancelledStatus: {
+    backgroundColor: '#FF6B6B',
+  },
+  pendingStatus: {
+    backgroundColor: '#FFA500',
+  },
+  upcomingStatus: {
+    backgroundColor: '#4CAF50',
+  },
+  usedStatus: {
+    backgroundColor: '#666',
   },
 });

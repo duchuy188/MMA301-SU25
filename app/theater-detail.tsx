@@ -122,7 +122,7 @@ export default function TheaterDetailScreen() {
           
           <View style={styles.infoRow}>
             <Star size={20} color="#FFD700" />
-            <Text style={styles.infoText}>{theater.screens || 'N/A'} phòng chiếu</Text>
+            <Text style={styles.infoText}>{theater.screens || '7'} phòng chiếu</Text>
           </View>
         </View>
 
