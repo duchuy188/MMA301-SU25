@@ -327,13 +327,44 @@ export default function SeatSelectionScreen() {
           return;
         }
         
+        // Convert startTime to local time for display
+        const getLocalTime = (dateTimeString: string) => {
+          if (!dateTimeString) return '';
+          try {
+            const date = new Date(dateTimeString);
+            return date.toLocaleTimeString('vi-VN', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: false 
+            });
+          } catch (error) {
+            // Fallback to slice method if conversion fails
+            return dateTimeString.slice(11, 16);
+          }
+        };
+
+        const getLocalDate = (dateTimeString: string) => {
+          if (!dateTimeString) return '';
+          try {
+            const date = new Date(dateTimeString);
+            return date.toLocaleDateString('vi-VN', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit'
+            }).split('/').reverse().join('-'); // Convert to YYYY-MM-DD format
+          } catch (error) {
+            // Fallback to slice method if conversion fails
+            return dateTimeString.slice(0, 10);
+          }
+        };
+
         router.push({
           pathname: '/payment',
           params: {
             movie: movie.title,
             cinema: theater.name,
-            date: screening.startTime ? screening.startTime.slice(0, 10) : '',
-            time: screening.startTime ? screening.startTime.slice(11, 16) : '',
+            date: getLocalDate(screening.startTime),
+            time: getLocalTime(screening.startTime),
             seats: selectedSeats.join(','),
             ticketPrice: ticketPrice.toString(),
             baseTotal: baseTotal.toString(),

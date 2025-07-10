@@ -23,6 +23,50 @@ export default function ETicketScreen() {
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Function to format date display to dd-mm-yyyy
+  const formatDateDisplay = (date: string) => {
+    if (!date) return '';
+    
+    // If it's already in dd-mm-yyyy format, return as is
+    if (date.match(/^\d{2}-\d{2}-\d{4}$/)) {
+      return date;
+    }
+    
+    // If it's in yyyy-mm-dd format, convert to dd-mm-yyyy
+    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const parts = date.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    
+    // If it's a full datetime string, extract and format date
+    if (date.includes('T')) {
+      try {
+        const dateObj = new Date(date);
+        const day = dateObj.getDate().toString().padStart(2, '0');
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${day}-${month}-${year}`;
+      } catch (error) {
+        return date;
+      }
+    }
+    
+    // Try to parse other date formats
+    try {
+      const dateObj = new Date(date);
+      if (!isNaN(dateObj.getTime())) {
+        const day = dateObj.getDate().toString().padStart(2, '0');
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${day}-${month}-${year}`;
+      }
+    } catch (error) {
+      // Return original if can't parse
+    }
+    
+    return date;
+  };
+
   useEffect(() => {
     const loadBookingData = async () => {
       try {
@@ -141,7 +185,7 @@ export default function ETicketScreen() {
                 <View style={styles.movieMeta}>
                   <View style={styles.metaItem}>
                     <Calendar size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{bookingData.ticketInfo.date}</Text>
+                    <Text style={styles.metaText}>{formatDateDisplay(bookingData.ticketInfo.date)}</Text>
                   </View>
                   <View style={styles.metaItem}>
                     <Clock size={16} color="#FFD700" />

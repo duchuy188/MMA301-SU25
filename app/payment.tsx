@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createBooking, updateBookingPaymentStatus, updateBookingStatus, getBookingById, updateBookingPaymentStatusViaStatus } from '../services/booking';
+import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus } from '../services/booking';
 
 interface TicketInfo {
   movie: string;
@@ -51,6 +51,73 @@ export default function PaymentScreen() {
   const finalTotal = ticketInfo?.finalTotal || ticketInfo?.ticketPrice || 0;
   const discount = ticketInfo?.discount || 0;
   const appliedPromoCode = ticketInfo?.appliedPromoCode || '';
+
+  // Function to format time display
+  const formatTimeDisplay = (time: string) => {
+    if (!time) return '';
+    
+    // If it's a full datetime string (ISO format), convert to local time
+    if (time.includes('T')) {
+      try {
+        const date = new Date(time);
+        // Convert to local time and format as HH:MM
+        return date.toLocaleTimeString('vi-VN', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false 
+        });
+      } catch (error) {
+        return time;
+      }
+    }
+    
+    // If it's already in HH:MM format, return as is
+    return time;
+  };
+
+  // Function to format date display to dd-mm-yyyy
+  const formatDateDisplay = (date: string) => {
+    if (!date) return '';
+    
+    // If it's already in dd-mm-yyyy format, return as is
+    if (date.match(/^\d{2}-\d{2}-\d{4}$/)) {
+      return date;
+    }
+    
+    // If it's in yyyy-mm-dd format, convert to dd-mm-yyyy
+    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      const parts = date.split('-');
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    
+    // If it's a full datetime string, extract and format date
+    if (date.includes('T')) {
+      try {
+        const dateObj = new Date(date);
+        const day = dateObj.getDate().toString().padStart(2, '0');
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${day}-${month}-${year}`;
+      } catch (error) {
+        return date;
+      }
+    }
+    
+    // Try to parse other date formats
+    try {
+      const dateObj = new Date(date);
+      if (!isNaN(dateObj.getTime())) {
+        const day = dateObj.getDate().toString().padStart(2, '0');
+        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
+        const year = dateObj.getFullYear();
+        return `${day}-${month}-${year}`;
+      }
+    } catch (error) {
+      // Return original if can't parse
+    }
+    
+    return date;
+  };
 
   useEffect(() => {
     // Nhận dữ liệu từ route params
@@ -435,11 +502,11 @@ export default function PaymentScreen() {
                 </View>
                 <View style={styles.ticketRow}>
                   <Text style={styles.ticketLabel}>Ngày:</Text>
-                  <Text style={styles.ticketValue}>{ticketInfo.date}</Text>
+                  <Text style={styles.ticketValue}>{formatDateDisplay(ticketInfo.date)}</Text>
                 </View>
                 <View style={styles.ticketRow}>
-                  <Text style={styles.ticketLabel}>Giờ:</Text>
-                  <Text style={styles.ticketValue}>{ticketInfo.time}</Text>
+                  <Text style={styles.ticketLabel}>Giờ chiếu:</Text>
+                  <Text style={styles.ticketValue}>{formatTimeDisplay(ticketInfo.time)}</Text>
                 </View>
                 <View style={styles.ticketRow}>
                   <Text style={styles.ticketLabel}>Ghế:</Text>
