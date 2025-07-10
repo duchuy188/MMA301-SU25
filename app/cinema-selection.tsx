@@ -149,7 +149,7 @@ export default function CinemaSelectionScreen() {
                 <View style={styles.metaRow}>
                   <View style={styles.ratingContainer}>
                     <Star size={14} color="#FFD700" />
-                    <Text style={styles.ratingText}>{theater.screens || 'N/A'} phòng</Text>
+                    <Text style={styles.ratingText}>{theater.screens || '7'} phòng</Text>
                   </View>
                 </View>
                 

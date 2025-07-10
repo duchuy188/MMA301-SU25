@@ -523,7 +523,7 @@ export default function HomeScreen() {
                 </Text>
                 <View style={styles.movieMetaSmall}>
                   <Star size={12} color="#FFD700" />
-                  <Text style={styles.ratingSmall}>{movie.rating || 'N/A'}</Text>
+                  <Text style={styles.ratingSmall}>{movie.rating || '7.5'}</Text>
                 </View>
               </View>
             </TouchableOpacity>

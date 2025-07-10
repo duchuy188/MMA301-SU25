@@ -65,7 +65,12 @@ export default function HistoryTicketScreen() {
             _id: parsedBooking._id,
             ticketInfo: {
               movie: parsedBooking?.screeningId?.movieId?.title || 'Phim không xác định',
-              cinema: parsedBooking?.screeningId?.theaterId?.name || 'Rạp không xác định',
+              cinema:
+                parsedBooking?.screeningId?.theaterId?.name ||
+                parsedBooking?.screeningId?.theaterName ||
+                parsedBooking?.theaterName ||
+                parsedBooking?.screeningId?.roomId?.theaterName ||
+                'Rạp không xác định',
               date: parsedBooking?.screeningId?.startTime || '',
               time: parsedBooking?.screeningId?.startTime || '',
               seats: parsedBooking.seatNumbers || [],
