@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { QrCode, Clock, MapPin, Calendar } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
@@ -17,7 +17,9 @@ export default function TicketsScreen() {
     try {
       setLoading(true);
       const userBookings = await getUserBookings();
-      setBookings(userBookings);
+      // Filter only paid bookings
+      const paidBookings = (userBookings.bookings || userBookings).filter((b: any) => b.paymentStatus === 'paid');
+      setBookings(paidBookings);
     } catch (error) {
       console.error('Error fetching user bookings:', error);
     } finally {
@@ -49,7 +51,8 @@ export default function TicketsScreen() {
       const date = new Date(dateString);
       return date.toLocaleTimeString('vi-VN', {
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: false
       });
     } catch {
       return dateString;
@@ -59,46 +62,49 @@ export default function TicketsScreen() {
   const getStatusText = (paymentStatus: string, screeningTime: string) => {
     if (paymentStatus === 'cancelled') return 'Đã hủy';
     if (paymentStatus === 'pending') return 'Chờ thanh toán';
-    
-    const now = new Date();
-    const screening = new Date(screeningTime);
-    
-    if (screening > now) return 'Sắp tới';
-    return 'Đã sử dụng';
+    // Không hiển thị trạng thái cho vé đã thanh toán
+    return '';
   };
 
   const getStatusStyle = (paymentStatus: string, screeningTime: string) => {
     const status = getStatusText(paymentStatus, screeningTime);
     if (status === 'Đã hủy') return styles.cancelledStatus;
     if (status === 'Chờ thanh toán') return styles.pendingStatus;
-    if (status === 'Sắp tới') return styles.upcomingStatus;
     return styles.usedStatus;
   };
 
   const handleTicketPress = (booking: any) => {
-    // Kiểm tra trạng thái payment trước khi navigate
+    // Luôn lấy ngày, giờ, rạp từ dữ liệu booking thực tế
+    const startTime = booking?.screeningId?.startTime;
+    const theaterName = booking?.screeningId?.theaterId?.name || 'Rạp không xác định';
+    const movieTitle = booking?.screeningId?.movieId?.title || 'Phim không xác định';
+    const seats = booking.seatNumbers;
+    const screeningId = booking?.screeningId?._id || booking.screeningId;
+    const ticketPrice = booking.totalPrice?.toString() || '90000';
+
     if (booking.paymentStatus === 'pending') {
-      // Nếu vẫn pending, có thể booking chưa được thanh toán hoặc có lỗi
-      // Navigate đến payment để hoàn tất thanh toán
       router.push({
         pathname: '/payment',
         params: {
           bookingId: booking._id,
-          movie: booking?.screeningId?.movieId?.title || 'Phim không xác định',
-          cinema: booking?.screeningId?.theaterId?.name || 'Rạp không xác định',
-          date: booking?.screeningId?.startTime ? booking.screeningId.startTime.slice(0, 10) : '',
-          time: booking?.screeningId?.startTime ? booking.screeningId.startTime.slice(11, 16) : '',
-          seats: booking.seatNumbers.join(','),
-          screeningId: booking?.screeningId?._id || booking.screeningId,
-          ticketPrice: booking.totalPrice?.toString() || '90000',
+          movie: movieTitle,
+          cinema: theaterName,
+          date: startTime,
+          time: startTime,
+          seats: seats.join(','),
+          screeningId: screeningId,
+          ticketPrice: ticketPrice,
         }
       });
     } else if (booking.paymentStatus === 'paid') {
-      // Nếu đã thanh toán, navigate đến e-ticket
-      router.push(`/e-ticket?bookingId=${booking._id}`);
-    } else {
-      // Cancelled hoặc trạng thái khác
-      console.log('Cannot view ticket for status:', booking.paymentStatus);
+      // Truyền toàn bộ dữ liệu booking sang e-ticket để lấy QR code và các trường khác
+      router.push({
+        pathname: '/e-ticket',
+        params: {
+          bookingId: booking._id,
+          booking: JSON.stringify(booking),
+        }
+      });
     }
   };
 
@@ -142,11 +148,16 @@ export default function TicketsScreen() {
             const movieTitle = booking?.screeningId?.movieId?.title || 
                               booking?.screeningId?.movieId?.vietnameseTitle || 
                               'Phim không xác định';
-            const theaterName = booking?.screeningId?.theaterId?.name || 'Rạp không xác định';
+            const theaterName =
+              booking?.screeningId?.theaterId?.name ||
+              booking?.screeningId?.theaterName ||
+              booking?.theaterName ||
+              booking?.screeningId?.roomId?.theaterName ||
+              'Rạp không xác định';
             const startTime = booking?.screeningId?.startTime || new Date().toISOString();
-            const room = booking?.screeningId?.room || 'Phòng 1';
-            const posterUrl = booking?.screeningId?.movieId?.posterUrl || 
-                             'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=300&h=400';
+            const roomName = booking?.screeningId?.room || booking?.screeningId?.roomId?.name || 'Phòng không xác định';
+            const bookingCode = booking._id;
+            const bookingDate = booking.createdAt;
 
             return (
               <TouchableOpacity 
@@ -156,22 +167,24 @@ export default function TicketsScreen() {
               >
                 <View style={styles.ticketContent}>
                   <View style={styles.ticketLeft}>
-                    <Image source={{ uri: posterUrl }} style={styles.ticketImage} />
+                    {/* Đã xóa hình ảnh poster phim theo yêu cầu */}
                   </View>
-                  
                   <View style={styles.ticketRight}>
                     <View style={styles.ticketHeader}>
                       <Text style={styles.movieTitle} numberOfLines={1}>
                         {movieTitle}
                       </Text>
-                      <View style={[
-                        styles.statusBadge,
-                        getStatusStyle(booking.paymentStatus, startTime)
-                      ]}>
-                        <Text style={styles.statusText}>
-                          {getStatusText(booking.paymentStatus, startTime)}
-                        </Text>
-                      </View>
+                      {/* Ẩn badge trạng thái nếu không có status */}
+                      {getStatusText(booking.paymentStatus, startTime) ? (
+                        <View style={[
+                          styles.statusBadge,
+                          getStatusStyle(booking.paymentStatus, startTime)
+                        ]}>
+                          <Text style={styles.statusText}>
+                            {getStatusText(booking.paymentStatus, startTime)}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
 
                     <View style={styles.ticketDetails}>
@@ -190,6 +203,18 @@ export default function TicketsScreen() {
                       <View style={styles.detailRow}>
                         <Text style={styles.seatLabel}>Ghế:</Text>
                         <Text style={styles.seatText}>{booking.seatNumbers.join(', ')}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Phòng:</Text>
+                        <Text style={styles.seatText}>{roomName}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Mã vé:</Text>
+                        <Text style={styles.seatText}>{bookingCode}</Text>
+                      </View>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.seatLabel}>Ngày đặt:</Text>
+                        <Text style={styles.seatText}>{bookingDate ? formatDate(bookingDate) + ' ' + formatTime(bookingDate) : 'N/A'}</Text>
                       </View>
                     </View>
 
@@ -265,12 +290,6 @@ const styles = StyleSheet.create({
   },
   ticketLeft: {
     marginRight: 15,
-  },
-  ticketImage: {
-    width: 60,
-    height: 80,
-    borderRadius: 8,
-    resizeMode: 'cover',
   },
   ticketRight: {
     flex: 1,

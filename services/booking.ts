@@ -238,8 +238,13 @@ export const getBookingById = async (bookingId: string): Promise<any> => {
         
         const response = await api.get(`/bookings/${bookingId}`);
         
-        const bookingData = response.data.data || response.data;
+        // Đảm bảo trả về đúng dữ liệu booking, không phải booking mới nhất
+        const bookingData = response.data.data || response.data.booking || response.data;
         
+        // Nếu có seatNumbers thì giữ nguyên, nếu không thì fallback []
+        if (!bookingData.seatNumbers) {
+            bookingData.seatNumbers = [];
+        }
         return bookingData;
     } catch (error: any) {
         if (error.response) {

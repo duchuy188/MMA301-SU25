@@ -4,130 +4,23 @@ import { ArrowLeft, Download, Share2, Calendar, Clock, MapPin, Star } from 'luci
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface BookingData {
-  _id: string;
-  ticketInfo: {
-    movie: string;
-    cinema: string;
-    date: string;
-    time: string;
-    seats: string[];
-  };
-  finalTotal: number;
-  paymentStatus: string;
-  qrCodeDataUrl?: string;
-}
-
 export default function ETicketScreen() {
-  const params = useLocalSearchParams();
-  const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  const { booking, bookingId } = useLocalSearchParams();
+  const [bookingData, setBookingData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to format date display to dd-mm-yyyy
-  const formatDateDisplay = (date: string) => {
-    if (!date) return '';
-    
-    // If it's already in dd-mm-yyyy format, return as is
-    if (date.match(/^\d{2}-\d{2}-\d{4}$/)) {
-      return date;
-    }
-    
-    // If it's in yyyy-mm-dd format, convert to dd-mm-yyyy
-    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      const parts = date.split('-');
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    
-    // If it's a full datetime string, extract and format date
-    if (date.includes('T')) {
-      try {
-        const dateObj = new Date(date);
-        const day = dateObj.getDate().toString().padStart(2, '0');
-        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-        const year = dateObj.getFullYear();
-        return `${day}-${month}-${year}`;
-      } catch (error) {
-        return date;
-      }
-    }
-    
-    // Try to parse other date formats
-    try {
-      const dateObj = new Date(date);
-      if (!isNaN(dateObj.getTime())) {
-        const day = dateObj.getDate().toString().padStart(2, '0');
-        const month = (dateObj.getMonth() + 1).toString().padStart(2, '0');
-        const year = dateObj.getFullYear();
-        return `${day}-${month}-${year}`;
-      }
-    } catch (error) {
-      // Return original if can't parse
-    }
-    
-    return date;
-  };
-
   useEffect(() => {
-    const loadBookingData = async () => {
-      try {
-        console.log('=== E-TICKET LOADING ===');
-        console.log('Params:', params);
-        
-        // Try to get booking from AsyncStorage first
-        const savedBooking = await AsyncStorage.getItem('currentBooking');
-        if (savedBooking) {
-          const parsedBooking = JSON.parse(savedBooking);
-          console.log('Loaded booking from AsyncStorage:', parsedBooking);
-          console.log('Payment status from storage:', parsedBooking.paymentStatus);
-          
-          // Ensure that if we have a booking from payment flow, it's marked as paid
-          // This handles the case where backend didn't update properly but payment was successful
-          if (parsedBooking.paymentStatus) {
-            console.log('✅ Using booking with payment status:', parsedBooking.paymentStatus);
-            setBookingData(parsedBooking);
-          } else {
-            console.log('⚠️ Booking without payment status, marking as paid');
-            parsedBooking.paymentStatus = 'paid';
-            setBookingData(parsedBooking);
-          }
-        } else {
-          console.log('No booking found in AsyncStorage');
-          // Fallback to sample data
-          setBookingData({
-            _id: params.bookingId as string || 'TK240001',
-            ticketInfo: {
-              movie: 'Avengers: Endgame',
-              cinema: 'Galaxy Cinema Nguyễn Du',
-              date: '22/12/2024',
-              time: '19:30',
-              seats: ['F7', 'F8'],
-            },
-            finalTotal: 420000,
-            paymentStatus: 'paid',
-          });
-        }
-      } catch (error) {
-        console.error('Error loading booking data:', error);
-        // Use fallback data
-        setBookingData({
-          _id: 'TK240001',
-          ticketInfo: {
-            movie: 'Avengers: Endgame',
-            cinema: 'Galaxy Cinema Nguyễn Du',
-            date: '22/12/2024',
-            time: '19:30',
-            seats: ['F7', 'F8'],
-          },
-          finalTotal: 420000,
-          paymentStatus: 'paid',
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadBookingData();
-  }, [params.bookingId]);
+    if (booking) {
+      // Sửa lỗi: ép kiểu đúng cho booking là string
+      setBookingData(JSON.parse(booking as unknown as string));
+      setLoading(false);
+    } else if (bookingId) {
+      // Nếu không có dữ liệu booking từ params, có thể fetch từ API ở đây nếu muốn
+      setLoading(false);
+    } else {
+      setLoading(false);
+    }
+  }, [booking, bookingId]);
 
   const handleBackHome = () => {
     router.push('/(tabs)');
@@ -135,31 +28,30 @@ export default function ETicketScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#FFD700" />
-        <Text style={styles.loadingText}>Đang tải vé...</Text>
+        <Text style={styles.text}>Đang tải vé...</Text>
       </View>
     );
   }
 
   if (!bookingData) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <Text style={styles.errorText}>Không tìm thấy thông tin vé</Text>
-        <TouchableOpacity style={styles.backHomeButton} onPress={handleBackHome}>
-          <Text style={styles.backHomeText}>Về trang chủ</Text>
-        </TouchableOpacity>
+      <View style={styles.center}>
+        <Text style={styles.text}>Không tìm thấy thông tin vé.</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color="#FFD700" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Vé điện tử</Text>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ArrowLeft size={24} color="#FFD700" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Vé điện tử</Text>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.actionButton}>
             <Download size={20} color="#FFD700" />
@@ -170,127 +62,167 @@ export default function ETicketScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.ticketContainer}>
-          <View style={styles.ticketBackground}>
-            <View style={styles.goldFoil} />
-            <View style={styles.ticketContent}>
-              <View style={styles.ticketHeader}>
-                <Text style={styles.cinemaName}>GALAXY CINEMA</Text>
-                <Text style={styles.ticketSubtitle}>Trải nghiệm điện ảnh cao cấp</Text>
-              </View>
+      <View style={styles.ticketContainer}>
+        <View style={styles.ticketBackground}>
+          <View style={styles.goldFoil} />
+          <View style={styles.ticketContent}>
+            <View style={styles.ticketHeader}>
+              <Text style={styles.cinemaName}>GALAXY CINEMA</Text>
+              <Text style={styles.ticketSubtitle}>Trải nghiệm điện ảnh cao cấp</Text>
+            </View>
 
-              <View style={styles.movieInfo}>
-                <Text style={styles.movieTitle}>{bookingData.ticketInfo.movie}</Text>
-                <View style={styles.movieMeta}>
-                  <View style={styles.metaItem}>
-                    <Calendar size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{formatDateDisplay(bookingData.ticketInfo.date)}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Clock size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{bookingData.ticketInfo.time}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.ticketDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Rạp:</Text>
-                  <Text style={styles.detailValue}>{bookingData.ticketInfo.cinema}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Địa chỉ:</Text>
-                  <Text style={styles.detailValue}>116 Nguyễn Du, Quận 1, TP.HCM</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Ghế:</Text>
-                  <Text style={styles.detailValue}>{bookingData.ticketInfo.seats.join(', ')}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Mã vé:</Text>
-                  <Text style={styles.detailValue}>{bookingData._id}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Trạng thái:</Text>
-                  <Text style={[
-                    styles.detailValue, 
-                    bookingData.paymentStatus === 'paid' ? styles.paidStatus : styles.pendingStatus
-                  ]}>
-                    {bookingData.paymentStatus === 'paid' ? 'ĐÃ THANH TOÁN' : 'CHƯA THANH TOÁN'}
+            <View style={styles.movieInfo}>
+              <Text style={styles.movieTitle}>{bookingData?.screeningId?.movieId?.title || 'Phim không xác định'}</Text>
+              <View style={styles.movieMeta}>
+                <View style={styles.metaItem}>
+                  <Calendar size={16} color="#FFD700" />
+                  <Text style={styles.metaText}>
+                    {bookingData?.screeningId?.startTime ?
+                      new Date(bookingData.screeningId.startTime).toLocaleDateString('vi-VN') :
+                      'Ngày không xác định'}
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Tổng tiền:</Text>
-                  <Text style={styles.detailValue}>
-                    {bookingData.finalTotal.toLocaleString('vi-VN')} VNĐ
+                <View style={styles.metaItem}>
+                  <Clock size={16} color="#FFD700" />
+                  <Text style={styles.metaText}>
+                    {bookingData?.screeningId?.startTime ?
+                      new Date(bookingData.screeningId.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false }) :
+                      'Giờ không xác định'}
                   </Text>
                 </View>
               </View>
+            </View>
 
-              <View style={styles.qrSection}>
-                <View style={styles.qrContainer}>
-                  <Image 
-                    source={{ 
-                      uri: bookingData.qrCodeDataUrl || 'https://images.pexels.com/photos/8369648/pexels-photo-8369648.jpeg?auto=compress&cs=tinysrgb&w=200&h=200'
-                    }} 
-                    style={styles.qrCode} 
-                  />
-                  <View style={styles.qrBorder} />
-                </View>
-                <Text style={styles.qrText}>
-                  Vui lòng xuất trình mã QR này tại quầy vé
+            <View style={styles.ticketDetails}>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Rạp:</Text>
+                <Text style={styles.detailValue}>
+                  {bookingData?.screeningId?.theaterId?.name ||
+                   bookingData?.screeningId?.theaterName ||
+                   bookingData?.theaterName ||
+                   bookingData?.screeningId?.roomId?.theaterName ||
+                   'Rạp không xác định'}
                 </Text>
               </View>
-
-              <View style={[
-                styles.validBadge,
-                bookingData.paymentStatus === 'paid' ? styles.validBadgePaid : styles.validBadgePending
-              ]}>
-                <Star size={16} color={bookingData.paymentStatus === 'paid' ? "#FFD700" : "#FF6B6B"} />
-                <Text style={[
-                  styles.validText,
-                  bookingData.paymentStatus === 'paid' ? styles.validTextPaid : styles.validTextPending
-                ]}>
-                  {bookingData.paymentStatus === 'paid' ? 'VÉ HỢP LỆ' : 'CHƯA THANH TOÁN'}
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Phòng:</Text>
+                <Text style={styles.detailValue}>{bookingData?.screeningId?.roomId?.name || 'Phòng không xác định'}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Ghế:</Text>
+                <Text style={styles.detailValue}>{bookingData?.seatNumbers?.join(', ')}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Mã vé:</Text>
+                <Text style={styles.detailValue}>{bookingData?._id}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Ngày đặt:</Text>
+                <Text style={styles.detailValue}>
+                  {bookingData?.createdAt
+                    ? `${new Date(bookingData.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${new Date(bookingData.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+                    : 'N/A'}
                 </Text>
               </View>
             </View>
-          </View>
-        </View>
 
-        <View style={styles.instructions}>
-          <Text style={styles.instructionsTitle}>Hướng dẫn sử dụng</Text>
-          <View style={styles.instructionsList}>
-            <Text style={styles.instructionItem}>
-              • Xuất trình mã QR tại quầy vé trước giờ chiếu 15 phút
-            </Text>
-            <Text style={styles.instructionItem}>
-              • Vé không thể đổi trả sau khi đã thanh toán
-            </Text>
-            <Text style={styles.instructionItem}>
-              • Vui lòng đến đúng giờ để tránh bỏ lỡ phần đầu phim
-            </Text>
-            <Text style={styles.instructionItem}>
-              • Liên hệ hotline 1900-6017 nếu cần hỗ trợ
-            </Text>
+            <View style={styles.qrSection}>
+              <View style={styles.qrContainer}>
+                <Image 
+                  source={{ 
+                    uri: bookingData.qrCodeDataUrl || 'https://images.pexels.com/photos/8369648/pexels-photo-8369648.jpeg?auto=compress&cs=tinysrgb&w=200&h=200'
+                  }} 
+                  style={styles.qrCode} 
+                />
+                <View style={styles.qrBorder} />
+              </View>
+              <Text style={styles.qrText}>
+                Vui lòng xuất trình mã QR này tại quầy vé
+              </Text>
+            </View>
+
+            <View style={[
+              styles.validBadge,
+              bookingData.paymentStatus === 'paid' ? styles.validBadgePaid : styles.validBadgePending
+            ]}>
+              <Star size={16} color={bookingData.paymentStatus === 'paid' ? "#FFD700" : "#FF6B6B"} />
+              <Text style={[
+                styles.validText,
+                bookingData.paymentStatus === 'paid' ? styles.validTextPaid : styles.validTextPending
+              ]}>
+                {bookingData.paymentStatus === 'paid' ? 'VÉ HỢP LỆ' : 'CHƯA THANH TOÁN'}
+              </Text>
+            </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
+
+      <View style={styles.instructions}>
+        <Text style={styles.instructionsTitle}>Hướng dẫn sử dụng</Text>
+        <View style={styles.instructionsList}>
+          <Text style={styles.instructionItem}>
+            • Xuất trình mã QR tại quầy vé trước giờ chiếu 15 phút
+          </Text>
+          <Text style={styles.instructionItem}>
+            • Vé không thể đổi trả sau khi đã thanh toán
+          </Text>
+          <Text style={styles.instructionItem}>
+            • Vui lòng đến đúng giờ để tránh bỏ lỡ phần đầu phim
+          </Text>
+          <Text style={styles.instructionItem}>
+            • Liên hệ hotline 1900-6017 nếu cần hỗ trợ
+          </Text>
+        </View>
+      </View>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.homeButton} onPress={handleBackHome}>
+        {/* <TouchableOpacity style={styles.homeButton} onPress={handleBackHome}>
           <Text style={styles.homeButtonText}>Về trang chủ</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: '#000',
+    flexGrow: 1,
+  },
+  center: {
     flex: 1,
-    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  title: {
+    fontSize: 22,
+    color: '#FFD700',
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  label: {
+    color: '#FFD700',
+    fontSize: 16,
+    marginTop: 8,
+  },
+  value: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  text: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 12,
+  },
+  qrImage: {
+    width: 200,
+    height: 200,
+    marginTop: 24,
+    borderRadius: 12,
+    backgroundColor: '#fff',
   },
   header: {
     flexDirection: 'row',
@@ -300,6 +232,13 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 20,
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'flex-start',
+    gap: 4,
+  },
   backButton: {
     padding: 8,
   },
@@ -307,16 +246,15 @@ const styles = StyleSheet.create({
     fontFamily: 'PlayfairDisplay-Bold',
     fontSize: 20,
     color: '#FFD700',
+    marginLeft: 8,
   },
   headerActions: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
   },
   actionButton: {
     padding: 8,
-  },
-  content: {
-    flex: 1,
   },
   ticketContainer: {
     paddingHorizontal: 20,
