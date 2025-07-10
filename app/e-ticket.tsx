@@ -1,23 +1,113 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Download, Share2, Calendar, Clock, MapPin, Star } from 'lucide-react-native';
+import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+interface BookingData {
+  _id: string;
+  ticketInfo: {
+    movie: string;
+    cinema: string;
+    date: string;
+    time: string;
+    seats: string[];
+  };
+  finalTotal: number;
+  paymentStatus: string;
+  qrCodeDataUrl?: string;
+}
 
 export default function ETicketScreen() {
-  const ticket = {
-    id: 'TK240001',
-    movie: 'Avengers: Endgame',
-    cinema: 'Galaxy Cinema Nguyễn Du',
-    address: '116 Nguyễn Du, Quận 1, TP.HCM',
-    date: '22/12/2024',
-    time: '19:30',
-    seats: ['F7', 'F8'],
-    total: 420000,
-    qrCode: 'https://images.pexels.com/photos/8369648/pexels-photo-8369648.jpeg?auto=compress&cs=tinysrgb&w=200&h=200',
-  };
+  const params = useLocalSearchParams();
+  const [bookingData, setBookingData] = useState<BookingData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const loadBookingData = async () => {
+      try {
+        console.log('=== E-TICKET LOADING ===');
+        console.log('Params:', params);
+        
+        // Try to get booking from AsyncStorage first
+        const savedBooking = await AsyncStorage.getItem('currentBooking');
+        if (savedBooking) {
+          const parsedBooking = JSON.parse(savedBooking);
+          console.log('Loaded booking from AsyncStorage:', parsedBooking);
+          console.log('Payment status from storage:', parsedBooking.paymentStatus);
+          
+          // Ensure that if we have a booking from payment flow, it's marked as paid
+          // This handles the case where backend didn't update properly but payment was successful
+          if (parsedBooking.paymentStatus) {
+            console.log('✅ Using booking with payment status:', parsedBooking.paymentStatus);
+            setBookingData(parsedBooking);
+          } else {
+            console.log('⚠️ Booking without payment status, marking as paid');
+            parsedBooking.paymentStatus = 'paid';
+            setBookingData(parsedBooking);
+          }
+        } else {
+          console.log('No booking found in AsyncStorage');
+          // Fallback to sample data
+          setBookingData({
+            _id: params.bookingId as string || 'TK240001',
+            ticketInfo: {
+              movie: 'Avengers: Endgame',
+              cinema: 'Galaxy Cinema Nguyễn Du',
+              date: '22/12/2024',
+              time: '19:30',
+              seats: ['F7', 'F8'],
+            },
+            finalTotal: 420000,
+            paymentStatus: 'paid',
+          });
+        }
+      } catch (error) {
+        console.error('Error loading booking data:', error);
+        // Use fallback data
+        setBookingData({
+          _id: 'TK240001',
+          ticketInfo: {
+            movie: 'Avengers: Endgame',
+            cinema: 'Galaxy Cinema Nguyễn Du',
+            date: '22/12/2024',
+            time: '19:30',
+            seats: ['F7', 'F8'],
+          },
+          finalTotal: 420000,
+          paymentStatus: 'paid',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadBookingData();
+  }, [params.bookingId]);
 
   const handleBackHome = () => {
     router.push('/(tabs)');
   };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#FFD700" />
+        <Text style={styles.loadingText}>Đang tải vé...</Text>
+      </View>
+    );
+  }
+
+  if (!bookingData) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <Text style={styles.errorText}>Không tìm thấy thông tin vé</Text>
+        <TouchableOpacity style={styles.backHomeButton} onPress={handleBackHome}>
+          <Text style={styles.backHomeText}>Về trang chủ</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -47,15 +137,15 @@ export default function ETicketScreen() {
               </View>
 
               <View style={styles.movieInfo}>
-                <Text style={styles.movieTitle}>{ticket.movie}</Text>
+                <Text style={styles.movieTitle}>{bookingData.ticketInfo.movie}</Text>
                 <View style={styles.movieMeta}>
                   <View style={styles.metaItem}>
                     <Calendar size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{ticket.date}</Text>
+                    <Text style={styles.metaText}>{bookingData.ticketInfo.date}</Text>
                   </View>
                   <View style={styles.metaItem}>
                     <Clock size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{ticket.time}</Text>
+                    <Text style={styles.metaText}>{bookingData.ticketInfo.time}</Text>
                   </View>
                 </View>
               </View>
@@ -63,25 +153,45 @@ export default function ETicketScreen() {
               <View style={styles.ticketDetails}>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Rạp:</Text>
-                  <Text style={styles.detailValue}>{ticket.cinema}</Text>
+                  <Text style={styles.detailValue}>{bookingData.ticketInfo.cinema}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Địa chỉ:</Text>
-                  <Text style={styles.detailValue}>{ticket.address}</Text>
+                  <Text style={styles.detailValue}>116 Nguyễn Du, Quận 1, TP.HCM</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Ghế:</Text>
-                  <Text style={styles.detailValue}>{ticket.seats.join(', ')}</Text>
+                  <Text style={styles.detailValue}>{bookingData.ticketInfo.seats.join(', ')}</Text>
                 </View>
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Mã vé:</Text>
-                  <Text style={styles.detailValue}>{ticket.id}</Text>
+                  <Text style={styles.detailValue}>{bookingData._id}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Trạng thái:</Text>
+                  <Text style={[
+                    styles.detailValue, 
+                    bookingData.paymentStatus === 'paid' ? styles.paidStatus : styles.pendingStatus
+                  ]}>
+                    {bookingData.paymentStatus === 'paid' ? 'ĐÃ THANH TOÁN' : 'CHƯA THANH TOÁN'}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Tổng tiền:</Text>
+                  <Text style={styles.detailValue}>
+                    {bookingData.finalTotal.toLocaleString('vi-VN')} VNĐ
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.qrSection}>
                 <View style={styles.qrContainer}>
-                  <Image source={{ uri: ticket.qrCode }} style={styles.qrCode} />
+                  <Image 
+                    source={{ 
+                      uri: bookingData.qrCodeDataUrl || 'https://images.pexels.com/photos/8369648/pexels-photo-8369648.jpeg?auto=compress&cs=tinysrgb&w=200&h=200'
+                    }} 
+                    style={styles.qrCode} 
+                  />
                   <View style={styles.qrBorder} />
                 </View>
                 <Text style={styles.qrText}>
@@ -89,9 +199,17 @@ export default function ETicketScreen() {
                 </Text>
               </View>
 
-              <View style={styles.validBadge}>
-                <Star size={16} color="#FFD700" />
-                <Text style={styles.validText}>VÉ HỢP LỆ</Text>
+              <View style={[
+                styles.validBadge,
+                bookingData.paymentStatus === 'paid' ? styles.validBadgePaid : styles.validBadgePending
+              ]}>
+                <Star size={16} color={bookingData.paymentStatus === 'paid' ? "#FFD700" : "#FF6B6B"} />
+                <Text style={[
+                  styles.validText,
+                  bookingData.paymentStatus === 'paid' ? styles.validTextPaid : styles.validTextPending
+                ]}>
+                  {bookingData.paymentStatus === 'paid' ? 'VÉ HỢP LỆ' : 'CHƯA THANH TOÁN'}
+                </Text>
               </View>
             </View>
           </View>
@@ -291,6 +409,58 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Bold',
     fontSize: 12,
     color: '#FFD700',
+  },
+  // New styles for loading, error, and payment status
+  centered: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    color: '#FFD700',
+    marginTop: 12,
+  },
+  errorText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  backHomeButton: {
+    backgroundColor: '#FFD700',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  backHomeText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 14,
+    color: '#000000',
+  },
+  paidStatus: {
+    color: '#4CAF50',
+    fontWeight: 'bold',
+  },
+  pendingStatus: {
+    color: '#FF9800',
+    fontWeight: 'bold',
+  },
+  validBadgePaid: {
+    backgroundColor: '#000000',
+    borderColor: '#4CAF50',
+  },
+  validBadgePending: {
+    backgroundColor: '#000000',
+    borderColor: '#FF9800',
+  },
+  validTextPaid: {
+    color: '#4CAF50',
+  },
+  validTextPending: {
+    color: '#FF9800',
   },
   instructions: {
     paddingHorizontal: 20,

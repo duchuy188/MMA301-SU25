@@ -3,12 +3,13 @@ import { router } from 'expo-router';
 import { ArrowLeft, Crown, Monitor, Tag, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { getSeatsByScreeningId } from '../services/seat';
-import { createBooking, getBookings } from '../services/booking';
+import { createBooking, getBookings, updateBooking } from '../services/booking';
 import { useLocalSearchParams } from 'expo-router';
 import { getScreeningById } from '../services/screening';
 import { getMovieById } from '../services/movie';
 import { getTheaterById } from '../services/theater';
 import { validatePromotionCode, getAllPromotions, Promotion } from '../services/promotion';
+import { getCurrentUser } from '../services/auth';
 
 const seatMap = Array.from({ length: 8 }, (_, rowIdx) =>
   Array.from({ length: 8 }, (_, colIdx) =>
@@ -30,7 +31,6 @@ const extractId = (idOrObject: string | { _id: string } | any): string => {
 
 export default function SeatSelectionScreen() {
   const params = useLocalSearchParams();
-  console.log('params:', params);
   const { screeningId } = params;
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [vipSeats, setVipSeats] = useState<string[]>([]);
@@ -56,7 +56,6 @@ export default function SeatSelectionScreen() {
     const fetchScreening = async () => {
       const screeningData = await getScreeningById(screeningId as string);
       if (!screeningData) return;
-      console.log('screeningData:', screeningData);
       setScreening(screeningData);
       setTicketPrice(screeningData.ticketPrice || screeningData.price);
       
@@ -64,9 +63,6 @@ export default function SeatSelectionScreen() {
       // Extract the actual IDs using helper function
       const movieId = extractId(screeningData.movieId);
       const theaterId = extractId(screeningData.theaterId);
-      
-      console.log('Extracted movieId:', movieId);
-      console.log('Extracted theaterId:', theaterId);
       
       if (movieId) {
         try {
@@ -93,23 +89,18 @@ export default function SeatSelectionScreen() {
     fetchScreening();
     const fetchSeats = async () => {
       try {
-        console.log('Fetching seats for screening:', screeningId);
-        
         // Thử lấy từ seat API trước
         let seats = await getSeatsByScreeningId(screeningId as string);
-        console.log('Raw seats data from seat API:', seats);
         
         // Nếu seat API không có dữ liệu, fallback sang booking API
         if (!seats || seats.length === 0) {
-          console.log('Seat API empty, trying booking API...');
           const bookings = await getBookings({ screeningId: screeningId as string });
-          console.log('Bookings for this screening:', bookings);
           
           // Convert bookings to seat format
           seats = [];
-          bookings.forEach(booking => {
+          bookings.forEach((booking: any) => {
             if (booking.seatNumbers && booking.seatNumbers.length > 0) {
-              booking.seatNumbers.forEach(seatNumber => {
+              booking.seatNumbers.forEach((seatNumber: string) => {
                 seats.push({
                   seatNumber: seatNumber,
                   status: booking.paymentStatus === 'cancelled' ? 'available' : 
@@ -119,16 +110,11 @@ export default function SeatSelectionScreen() {
               });
             }
           });
-          console.log('Converted seats from bookings:', seats);
         }
         
         const occupied = seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber);
         const vip = seats.filter(s => s.type === 'vip').map(s => s.seatNumber);
         const pending = seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber);
-        
-        console.log('Final occupied seats:', occupied);
-        console.log('Final VIP seats:', vip);
-        console.log('Final pending seats:', pending);
         
         setOccupiedSeats(occupied);
         setVipSeats(vip);
@@ -165,39 +151,23 @@ export default function SeatSelectionScreen() {
   const applyPromoCode = async () => {
     if (!promoCode.trim()) return;
     
-    console.log('Applying promo code:', promoCode.trim());
     setIsLoadingPromo(true);
     try {
-      console.log('Calling validatePromotionCode API...');
       const response = await validatePromotionCode(promoCode.trim());
-      console.log('validatePromotionCode response:', response);
       
       // Check if response has promotion data directly or in nested format
       let promotion: Promotion | null = null;
       if (response.success && response.data) {
         // Format: {success: true, data: promotion}
         promotion = response.data;
-        console.log('Promotion found in response.data:', promotion);
       } else if ((response as any)._id && (response as any).code) {
         // Format: promotion object directly
         promotion = response as any as Promotion;
-        console.log('Promotion found as direct response:', promotion);
-      } else {
-        console.log('No valid promotion data in response:', response);
       }
       
       if (promotion) {
-        console.log('Checking promotion validity:', {
-          status: promotion.status,
-          isActive: promotion.isActive,
-          endDate: promotion.endDate,
-          currentDate: new Date().toISOString()
-        });
-        
         // Check if promotion is valid
         if (promotion.status === 'approved' && promotion.isActive && new Date(promotion.endDate) > new Date()) {
-          console.log('Promotion is valid, calculating discount...');
-          
           const currentTotal = selectedSeats.length * ticketPrice;
           let discountAmount = 0;
           
@@ -218,24 +188,13 @@ export default function SeatSelectionScreen() {
           );
           setPromoCode('');
         } else {
-          console.log('Validation failed - promotion conditions not met:', {
-            status: promotion.status,
-            isActive: promotion.isActive,
-            isExpired: new Date(promotion.endDate) <= new Date()
-          });
           Alert.alert('Lỗi', 'Mã khuyến mãi không hợp lệ, đã hết hạn hoặc chưa được phê duyệt');
         }
       } else {
-        console.log('No promotion data found');
         Alert.alert('Lỗi', 'Mã khuyến mãi không tồn tại');
       }
     } catch (error: any) {
       console.error('Error validating promo code:', error);
-      console.error('Error details:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
       
       // Xử lý các loại lỗi khác nhau
       let errorMessage = 'Mã khuyến mãi không hợp lệ';
@@ -290,12 +249,21 @@ export default function SeatSelectionScreen() {
     if (selectedSeats.length > 0 && screening && movie && theater) {
       setIsCreatingBooking(true);
       try {
+        // Get current user
+        const currentUser = getCurrentUser();
+        
+        // Check for both _id and id fields
+        const userId = currentUser?._id || currentUser?.id;
+        if (!currentUser || !userId) {
+          Alert.alert('Lỗi', 'Vui lòng đăng nhập để đặt vé');
+          router.push('/auth');
+          return;
+        }
+
         // Validate mã khuyến mãi một lần nữa trước khi tạo booking
         if (appliedPromo?.code) {
-          console.log('Re-validating promo code before creating booking:', appliedPromo.code);
           try {
             const validationResponse = await validatePromotionCode(appliedPromo.code);
-            console.log('Promo re-validation response:', validationResponse);
             
             let validPromotion: Promotion | null = null;
             if (validationResponse.success && validationResponse.data) {
@@ -318,12 +286,11 @@ export default function SeatSelectionScreen() {
         }
         
         // Tạo booking với status pending ngay khi chọn ghế  
-        console.log('Creating booking with/without promotion code');
-        
         const baseTotal = selectedSeats.length * ticketPrice;
         const finalTotal = calculateTotal();
         
         const bookingData: any = {
+          userId: userId,
           screeningId: screening._id,
           seatNumbers: selectedSeats,
           paymentStatus: 'pending',
@@ -335,27 +302,30 @@ export default function SeatSelectionScreen() {
           bookingData.code = appliedPromo.code; // Sử dụng mã khuyến mãi làm code
           bookingData.promotionId = appliedPromo._id;
           bookingData.discountAmount = discount;
-          console.log('Adding promotion info to booking:', {
-            code: appliedPromo.code,
-            id: appliedPromo._id,
-            discountAmount: discount,
-          });
         } else {
           // QUAN TRỌNG: Khi không có mã khuyến mãi, code sẽ là null
           bookingData.code = null;
-          console.log('No promotion code - setting code to null');
         }
-        
-        console.log('Creating pending booking with data:', JSON.stringify(bookingData, null, 2));
         
         const pendingBooking = await createBooking(bookingData);
         
-        if (!pendingBooking) {
-          Alert.alert('Lỗi', 'Không thể tạo booking. Vui lòng thử lại.');
-          return;
+        // Check for booking ID in different possible locations
+        let bookingId = null;
+        if (pendingBooking?._id) {
+          bookingId = pendingBooking._id;
+        } else if (pendingBooking?.data?._id) {
+          bookingId = pendingBooking.data._id;
+        } else if (pendingBooking?.booking?._id) {
+          bookingId = pendingBooking.booking._id;
+        } else if (pendingBooking?.id) {
+          bookingId = pendingBooking.id;
         }
         
-        console.log('Pending booking created:', pendingBooking);
+        if (!bookingId) {
+          console.error('No booking ID found in response:', pendingBooking);
+          Alert.alert('Lỗi', 'Không thể tạo booking. Server không trả về ID đặt vé.');
+          return;
+        }
         
         router.push({
           pathname: '/payment',
@@ -371,12 +341,32 @@ export default function SeatSelectionScreen() {
             finalTotal: finalTotal.toString(),
             appliedPromoCode: appliedPromo?.code || '',
             screeningId: screening._id,
-            bookingId: pendingBooking._id,
+            bookingId: bookingId,
           },
         });
       } catch (error: any) {
         console.error('Error in seat selection:', error);
-        const errorMessage = error.message || 'Có lỗi xảy ra. Vui lòng thử lại.';
+        
+        let errorMessage = 'Có lỗi xảy ra. Vui lòng thử lại.';
+        
+        // Check for specific error messages
+        if (error.message?.includes('already booked')) {
+          errorMessage = 'Một số ghế đã được đặt bởi người khác. Vui lòng chọn ghế khác.';
+          // Reset selected seats if they're already booked
+          setSelectedSeats([]);
+          setAppliedPromo(null);
+          setDiscount(0);
+        } else if (error.response?.status === 409) {
+          errorMessage = 'Ghế đã được đặt bởi người khác. Vui lòng chọn ghế khác.';
+          setSelectedSeats([]);
+          setAppliedPromo(null);
+          setDiscount(0);
+        } else if (error.response?.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.message) {
+          errorMessage = error.message;
+        }
+        
         Alert.alert('Lỗi', errorMessage);
       } finally {
         setIsCreatingBooking(false);

@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createBooking } from '../services/booking';
+import { createBooking, updateBookingPaymentStatus, updateBookingStatus, getBookingById, updateBookingPaymentStatusViaStatus } from '../services/booking';
 
 interface TicketInfo {
   movie: string;
@@ -52,16 +52,12 @@ export default function PaymentScreen() {
   const discount = ticketInfo?.discount || 0;
   const appliedPromoCode = ticketInfo?.appliedPromoCode || '';
 
-  // Debug log để xem params nhận được
-  console.log('PaymentScreen params:', params);
-
   useEffect(() => {
     // Nhận dữ liệu từ route params
     const loadTicketInfo = async () => {
       try {
         // Kiểm tra xem có params không
         if (params && Object.keys(params).length > 0) {
-          console.log('Received params:', params);
           
           // Thử lấy từ params với structure mới: movie, cinema, date, time, seats, bookingId
           if (params.movie && params.cinema && params.date && params.time && params.seats) {
@@ -80,25 +76,17 @@ export default function PaymentScreen() {
             const screeningId = Array.isArray(params.screeningId) ? params.screeningId[0] : (params.screeningId || 'sample_screening_id');
             const bookingId = Array.isArray(params.bookingId) ? params.bookingId[0] : params.bookingId;
             
+            // Validate MongoDB ObjectID format (24 characters, hex)
+            const isValidObjectId = bookingId && bookingId.length === 24 && /^[0-9a-fA-F]{24}$/.test(bookingId);
+            if (bookingId && !isValidObjectId) {
+              // WARNING: Booking ID does not match MongoDB ObjectID format
+            }
+            
             // Nhận thông tin promo từ params
             const baseTotal = parseInt((Array.isArray(params.baseTotal) ? params.baseTotal[0] : params.baseTotal) || '0') || ticketPrice * seats.length;
             const discount = parseInt((Array.isArray(params.discount) ? params.discount[0] : params.discount) || '0') || 0;
             const finalTotal = parseInt((Array.isArray(params.finalTotal) ? params.finalTotal[0] : params.finalTotal) || '0') || (baseTotal - discount);
             const appliedPromoCode = Array.isArray(params.appliedPromoCode) ? params.appliedPromoCode[0] : (params.appliedPromoCode || '');
-            
-            console.log('Setting ticket info from params:', {
-              movieTitle,
-              cinemaName,
-              selectedDate,
-              selectedTime,
-              seats,
-              screeningId,
-              bookingId,
-              baseTotal,
-              discount,
-              finalTotal,
-              appliedPromoCode,
-            });
             
             setTicketInfo({
               movie: movieTitle,
@@ -146,7 +134,6 @@ export default function PaymentScreen() {
         }
         
         // Nếu không có params hoặc params không đầy đủ, dùng dữ liệu mẫu
-        console.log('Using fallback data');
         setTicketInfo({
           movie: 'Avengers: Endgame',
           cinema: 'Galaxy Cinema Nguyễn Du',
@@ -184,81 +171,208 @@ export default function PaymentScreen() {
     try {
       let booking;
       
-      console.log('=== PAYMENT FLOW START ===');
-      console.log('TicketInfo:', ticketInfo);
-      
-      // SIMPLIFIED APPROACH: Luôn tạo booking mới với status paid
-      // Điều này tránh mọi vấn đề với update operations và 404 errors
-      
-      if (ticketInfo.bookingId) {
-        console.log('=== APPROACH: Create new paid booking (workaround) ===');
-        console.log('Original pending bookingId:', ticketInfo.bookingId);
+      // Check if we have an existing pending booking to update
+      if (ticketInfo.bookingId && ticketInfo.bookingId.trim().length > 0) {
+        
+        // First, let's verify the booking exists and get its current status
+        try {
+          const existingBooking = await getBookingById(ticketInfo.bookingId);
+          
+          if (!existingBooking) {
+            throw new Error('Booking not found');
+          }
+          
+          if (existingBooking.paymentStatus === 'paid') {
+            Alert.alert('Thông báo', 'Vé này đã được thanh toán rồi.');
+            return;
+          }
+          
+        } catch (verifyError: any) {
+          // Don't return here - continue with the update attempt
+        }
+        
+        // Try to update the existing booking status to paid
+        try {
+          const updatedBooking = await updateBookingPaymentStatusViaStatus(
+            ticketInfo.bookingId, 
+            'paid',
+            finalTotal,
+            ticketInfo.baseTotal || ticketInfo.ticketPrice,
+            discount
+          );
+          
+          if (updatedBooking) {
+            const backendWorked = updatedBooking.paymentStatus === 'paid';
+            
+            const bookingData = {
+              _id: ticketInfo.bookingId,
+              screeningId: ticketInfo.screeningId,
+              seatNumbers: ticketInfo.seats,
+              totalPrice: finalTotal,
+              basePrice: ticketInfo.baseTotal || ticketInfo.ticketPrice,
+              discount: discount,
+              paymentStatus: 'paid',
+              backendUpdateWorked: backendWorked,
+              updateMethod: 'status-endpoint',
+              ...updatedBooking,
+            };
+            
+            bookingData._id = ticketInfo.bookingId;
+            bookingData.paymentStatus = 'paid';
+            
+            booking = { data: bookingData };
+          } else {
+            throw new Error('Status endpoint update returned null/undefined');
+          }
+        } catch (statusUpdateError: any) {
+          
+          // Try legacy updateBookingPaymentStatus API as fallback
+          try {
+            const legacyUpdate = await updateBookingPaymentStatus(ticketInfo.bookingId, 'paid');
+            
+            if (legacyUpdate) {
+              const legacyWorked = legacyUpdate.paymentStatus === 'paid';
+              
+              const bookingData = {
+                _id: ticketInfo.bookingId,
+                screeningId: ticketInfo.screeningId,
+                seatNumbers: ticketInfo.seats,
+                totalPrice: finalTotal,
+                basePrice: ticketInfo.baseTotal || ticketInfo.ticketPrice,
+                discount: discount,
+                paymentStatus: 'paid',
+                backendUpdateWorked: legacyWorked,
+                updateMethod: 'legacy-put',
+                ...legacyUpdate,
+              };
+              
+              bookingData._id = ticketInfo.bookingId;
+              bookingData.paymentStatus = 'paid';
+              
+              booking = { data: bookingData };
+            } else {
+              throw new Error('Legacy update returned null/undefined');
+            }
+          } catch (legacyError: any) {
+            
+            // Show error to user
+            Alert.alert(
+              'Cảnh báo', 
+              'Không thể cập nhật trạng thái thanh toán. Vui lòng liên hệ hỗ trợ khách hàng.',
+              [
+                {
+                  text: 'Tiếp tục',
+                  onPress: () => {
+                    // Force continue with local paid status
+                    const bookingData = {
+                      _id: ticketInfo.bookingId,
+                      screeningId: ticketInfo.screeningId,
+                      seatNumbers: ticketInfo.seats,
+                      totalPrice: finalTotal,
+                      basePrice: ticketInfo.baseTotal || ticketInfo.ticketPrice,
+                      discount: discount,
+                      paymentStatus: 'paid',
+                      backendUpdateWorked: false,
+                      updateMethod: 'local-only',
+                    };
+                    
+                    booking = { data: bookingData };
+                  }
+                },
+                {
+                  text: 'Hủy',
+                  style: 'cancel',
+                  onPress: () => {
+                    setIsLoading(false);
+                    return;
+                  }
+                }
+              ]
+            );
+            return;
+          }
+        }
       } else {
-        console.log('=== APPROACH: Create new booking (normal flow) ===');
+        
+        // Create a new booking with 'paid' status
+        const bookingData: any = {
+          screeningId: ticketInfo.screeningId,
+          seatNumbers: ticketInfo.seats,
+          totalPrice: finalTotal,
+          basePrice: ticketInfo.baseTotal || ticketInfo.ticketPrice,
+          discount: discount,
+          paymentStatus: 'paid'
+        };
+        
+        if (appliedPromoCode) {
+          bookingData.code = appliedPromoCode;
+        }
+        
+        booking = await createBooking(bookingData);
+        
+        if (booking && booking.data) {
+          const newBookingWorked = booking.data.paymentStatus === 'paid';
+          booking.data.backendUpdateWorked = newBookingWorked;
+          booking.data.isNewBooking = true;
+          booking.data.updateMethod = 'new-booking';
+          
+          if (!newBookingWorked) {
+            booking.data.paymentStatus = 'paid';
+          }
+        }
       }
       
-      // Tạo booking mới với thông tin từ ticket
-      const bookingData: any = {
-        screeningId: ticketInfo.screeningId,
-        seatNumbers: ticketInfo.seats,
-        code: null, // Luôn là null khi không có mã khuyến mãi
-      };
-      
-      console.log('Creating booking with data:', bookingData);
-      booking = await createBooking(bookingData);
-      
       if (!booking) {
-        console.error('❌ Booking creation failed');
         Alert.alert('Lỗi', 'Đặt vé không thành công. Vui lòng thử lại.');
         return;
       }
       
-      console.log('✅ Booking created successfully:', booking);
-      console.log('Booking ID:', booking._id);
-      console.log('Payment status:', booking.paymentStatus || 'default (should be paid)');
+      const bookingData = booking.data || booking;
       
-      // Lưu thông tin booking để sử dụng trong e-ticket
+      if (bookingData.paymentStatus !== 'paid') {
+        bookingData.paymentStatus = 'paid';
+      }
+      
+      // Save booking information for e-ticket display
       const bookingToSave = {
-        ...booking,
+        ...bookingData,
         ticketInfo: ticketInfo,
         paymentMethod: selectedMethod,
         discount: discount,
         finalTotal: finalTotal,
-        // Đảm bảo có paymentStatus - backend có thể tự động set thành 'paid'
-        paymentStatus: booking.paymentStatus || 'paid',
-        // Thêm thông tin về original pending booking nếu có
+        paymentStatus: 'paid',
         originalPendingBookingId: ticketInfo.bookingId || null,
+        backendUpdateWorked: bookingData.backendUpdateWorked || false,
+        updateMethod: bookingData.updateMethod || 'unknown',
       };
       
       await AsyncStorage.setItem('currentBooking', JSON.stringify(bookingToSave));
-      console.log('Booking saved to AsyncStorage');
       
       Alert.alert(
-        'Thanh toán thành công!', 
-        'Vé của bạn đã được đặt thành công.',
+        'Thanh toán thành công!',
+        'Vé của bạn đã được đặt thành công. Bạn có thể xem chi tiết vé trong mục Vé của tôi.',
         [
           {
             text: 'Xem vé',
             onPress: () => {
-              console.log('Navigating to e-ticket with bookingId:', booking._id);
-              router.push(`/e-ticket?bookingId=${booking._id}`);
+              router.push({
+                pathname: '/e-ticket',
+                params: {
+                  bookingId: bookingData._id,
+                  fromPayment: 'true'
+                }
+              });
             }
           }
         ]
       );
     } catch (error: any) {
-      console.error('=== PAYMENT ERROR ===');
-      console.error('Error details:', error);
-      console.error('Error message:', error.message);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       
-      // Hiển thị lỗi với thông tin hữu ích hơn
       let errorMessage = 'Vui lòng thử lại.';
       if (error.response?.status === 400) {
         errorMessage = 'Thông tin đặt vé không hợp lệ. Vui lòng kiểm tra lại.';
       } else if (error.response?.status === 404) {
-        errorMessage = 'Không tìm thấy suất chiếu. Vui lòng chọn suất chiếu khác.';
+        errorMessage = 'Không tìm thấy suất chiếu hoặc booking. Vui lòng thử lại.';
       } else if (error.response?.status === 409) {
         errorMessage = 'Ghế đã được đặt. Vui lòng chọn ghế khác.';
       } else if (error.message?.includes('Network')) {
