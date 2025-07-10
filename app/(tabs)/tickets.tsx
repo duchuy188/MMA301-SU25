@@ -8,6 +8,8 @@ export default function TicketsScreen() {
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     fetchUserBookings();
@@ -108,6 +110,10 @@ export default function TicketsScreen() {
     }
   };
 
+  // Pagination logic
+  const totalPages = Math.ceil(bookings.length / itemsPerPage);
+  const paginatedBookings = bookings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -144,7 +150,7 @@ export default function TicketsScreen() {
         </View>
       ) : (
         <View style={styles.ticketsList}>
-          {bookings.map((booking) => {
+          {paginatedBookings.map((booking) => {
             const movieTitle = booking?.screeningId?.movieId?.title || 
                               booking?.screeningId?.movieId?.vietnameseTitle || 
                               'Phim không xác định';
@@ -190,15 +196,15 @@ export default function TicketsScreen() {
                     <View style={styles.ticketDetails}>
                       <View style={styles.detailRow}>
                         <MapPin size={14} color="#666" />
-                        <Text style={styles.detailText} numberOfLines={1}>
+                        <Text style={styles.seatText} numberOfLines={1}>
                           {theaterName}
                         </Text>
                       </View>
                       <View style={styles.detailRow}>
                         <Calendar size={14} color="#666" />
-                        <Text style={styles.detailText}>{formatDate(startTime)}</Text>
+                        <Text style={styles.seatText}>{formatDate(startTime)}</Text>
                         <Clock size={14} color="#666" />
-                        <Text style={styles.detailText}>{formatTime(startTime)}</Text>
+                        <Text style={styles.seatText}>{formatTime(startTime)}</Text>
                       </View>
                       <View style={styles.detailRow}>
                         <Text style={styles.seatLabel}>Ghế:</Text>
@@ -230,7 +236,12 @@ export default function TicketsScreen() {
                     {booking.paymentStatus === 'paid' && (
                       <TouchableOpacity 
                         style={styles.qrButton}
-                        onPress={() => handleTicketPress(booking)}
+                        onPress={() => router.push({
+                          pathname: '/historyticket',
+                          params: {
+                            booking: JSON.stringify(booking),
+                          }
+                        })}
                       >
                         <QrCode size={16} color="#000000" />
                         <Text style={styles.qrButtonText}>Xem mã QR</Text>
@@ -241,6 +252,26 @@ export default function TicketsScreen() {
               </TouchableOpacity>
             );
           })}
+          {/* Pagination controls */}
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16, gap: 12 }}>
+            <TouchableOpacity
+              onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ opacity: currentPage === 1 ? 0.5 : 1, padding: 8 }}
+            >
+              <Text style={{ color: '#FFD700', fontFamily: 'Montserrat-SemiBold', fontSize: 16 }}>{'<'}</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#FFD700', fontFamily: 'Montserrat-SemiBold', fontSize: 14 }}>
+              {currentPage} / {totalPages}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              style={{ opacity: currentPage === totalPages ? 0.5 : 1, padding: 8 }}
+            >
+              <Text style={{ color: '#FFD700', fontFamily: 'Montserrat-SemiBold', fontSize: 16 }}>{'>'}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </ScrollView>

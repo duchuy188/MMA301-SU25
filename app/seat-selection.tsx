@@ -25,7 +25,6 @@ const extractId = (idOrObject: string | { _id: string } | any): string => {
   if (typeof idOrObject === 'object' && idOrObject?._id) {
     return idOrObject._id;
   }
-  console.warn('Invalid ID format:', idOrObject);
   return '';
 };
 
@@ -69,7 +68,6 @@ export default function SeatSelectionScreen() {
           const movieData = await getMovieById(movieId);
           setMovie(movieData);
         } catch (error) {
-          console.error('Error fetching movie:', error);
           // Set a default movie object to prevent crashes
           setMovie({ title: 'Không xác định', _id: movieId });
         }
@@ -80,7 +78,6 @@ export default function SeatSelectionScreen() {
           const theaterData = await getTheaterById(theaterId);
           setTheater(theaterData);
         } catch (error) {
-          console.error('Error fetching theater:', error);
           // Set a default theater object to prevent crashes
           setTheater({ name: 'Không xác định', _id: theaterId });
         }
@@ -120,7 +117,6 @@ export default function SeatSelectionScreen() {
         setVipSeats(vip);
         setPendingSeats(pending);
       } catch (error) {
-        console.error('Error fetching seats:', error);
         // Continue with empty seat data if there's an error
       }
     };
@@ -194,8 +190,6 @@ export default function SeatSelectionScreen() {
         Alert.alert('Lỗi', 'Mã khuyến mãi không tồn tại');
       }
     } catch (error: any) {
-      console.error('Error validating promo code:', error);
-      
       // Xử lý các loại lỗi khác nhau
       let errorMessage = 'Mã khuyến mãi không hợp lệ';
       if (error.response?.status === 404) {
@@ -279,7 +273,6 @@ export default function SeatSelectionScreen() {
               return;
             }
           } catch (error: any) {
-            console.error('Error re-validating promo code:', error);
             Alert.alert('Lỗi', 'Không thể xác minh mã khuyến mãi. Vui lòng thử lại.');
             return;
           }
@@ -322,7 +315,6 @@ export default function SeatSelectionScreen() {
         }
         
         if (!bookingId) {
-          console.error('No booking ID found in response:', pendingBooking);
           Alert.alert('Lỗi', 'Không thể tạo booking. Server không trả về ID đặt vé.');
           return;
         }
@@ -376,8 +368,6 @@ export default function SeatSelectionScreen() {
           },
         });
       } catch (error: any) {
-        console.error('Error in seat selection:', error);
-        
         let errorMessage = 'Có lỗi xảy ra. Vui lòng thử lại.';
         
         // Check for specific error messages
