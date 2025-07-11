@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Calendar, Clock } from 'lucide-react-native';
 import { getPublicScreenings, Screening } from '../services/screening';
 
+
 const dates = [
   { id: '1', date: '20', day: 'Thứ 2', month: 'Th12', isToday: false },
   { id: '2', date: '21', day: 'Thứ 3', month: 'Th12', isToday: false },
@@ -27,7 +28,7 @@ const timeSlots = [
 ];
 
 export default function DateTimeSelectionScreen() {
-  const { theaterId } = useLocalSearchParams();
+  const { theaterId, movieId } = useLocalSearchParams();
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedTime, setSelectedTime] = useState('');
   const [screenings, setScreenings] = useState<Screening[]>([]);
@@ -36,7 +37,12 @@ export default function DateTimeSelectionScreen() {
   // useEffect fetch screenings và set dateOptions
   useEffect(() => {
     const fetchScreenings = async () => {
-      const data = await getPublicScreenings(theaterId ? { theaterId: String(theaterId) } : undefined);
+      const params = {
+        theaterId: theaterId ? String(theaterId) : undefined,
+        movieId: movieId ? String(movieId) : undefined
+      };
+      
+      const data = await getPublicScreenings(params);
       setScreenings(data);
 
       // Tạo 5 ngày liên tiếp từ hôm nay
@@ -59,7 +65,7 @@ export default function DateTimeSelectionScreen() {
       setDateOptions(fiveDates);
     };
     fetchScreenings();
-  }, [theaterId]);
+  }, [theaterId, movieId]);
 
   // useEffect set selectedDate khi dateOptions hoặc screenings đổi
   useEffect(() => {

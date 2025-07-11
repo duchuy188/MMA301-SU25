@@ -1,8 +1,11 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Download, Share2, Calendar, Clock, MapPin, Star } from 'lucide-react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
 
 interface BookingData {
   _id: string;
@@ -22,6 +25,7 @@ export default function ETicketScreen() {
   const params = useLocalSearchParams();
   const [bookingData, setBookingData] = useState<BookingData | null>(null);
   const [loading, setLoading] = useState(true);
+  const viewShotRef = useRef<ViewShot>(null);
 
   // Function to format date display to dd-mm-yyyy
   const formatDateDisplay = (date: string) => {
@@ -84,7 +88,6 @@ export default function ETicketScreen() {
             setBookingData(parsedBooking);
           }
         } else {
-          // console.log('No booking found in AsyncStorage');
           // Fallback to sample data
           setBookingData({
             _id: params.bookingId as string || 'TK240001',
@@ -125,6 +128,57 @@ export default function ETicketScreen() {
     router.push('/(tabs)');
   };
 
+  // Chức năng chụp màn hình và lưu thành hình ảnh
+  const captureAndDownload = async () => {
+    try {
+      // Yêu cầu quyền truy cập vào thư viện ảnh
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      
+      if (status !== 'granted') {
+        alert('Cần cấp quyền để lưu ảnh vào thư viện!');
+        return;
+      }
+      
+      if (viewShotRef.current) {
+        const uri = await viewShotRef.current?.capture?.() || '';
+        
+        // Lưu ảnh vào thư viện
+        if (uri) {
+          await MediaLibrary.saveToLibraryAsync(uri);
+          alert('Vé đã được lưu vào thư viện ảnh!');
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi chụp màn hình:', error);
+      alert('Không thể lưu vé. Vui lòng thử lại sau.');
+    }
+  };
+
+  // Chức năng chụp màn hình và chia sẻ
+  const captureAndShare = async () => {
+    try {
+      if (viewShotRef.current) {
+        const uri = await viewShotRef.current?.capture?.() || '';
+        
+        // Kiểm tra xem thiết bị có hỗ trợ chia sẻ không
+        const isAvailable = await Sharing.isAvailableAsync();
+        
+        if (isAvailable) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'image/jpeg',
+            dialogTitle: 'Chia sẻ vé xem phim',
+            UTI: 'public.jpeg' // Cho iOS
+          });
+        } else {
+          alert('Tính năng chia sẻ không khả dụng trên thiết bị này');
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi chia sẻ:', error);
+      alert('Không thể chia sẻ vé. Vui lòng thử lại sau.');
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -153,103 +207,105 @@ export default function ETicketScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Vé điện tử</Text>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={captureAndDownload}>
             <Download size={20} color="#FFD700" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity style={styles.actionButton} onPress={captureAndShare}>
             <Share2 size={20} color="#FFD700" />
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView style={styles.content}>
-        <View style={styles.ticketContainer}>
-          <View style={styles.ticketBackground}>
-            <View style={styles.goldFoil} />
-            <View style={styles.ticketContent}>
-              <View style={styles.ticketHeader}>
-                <Text style={styles.cinemaName}>GALAXY CINEMA</Text>
-                <Text style={styles.ticketSubtitle}>Trải nghiệm điện ảnh cao cấp</Text>
-              </View>
+        <ViewShot ref={viewShotRef} options={{ format: "jpg", quality: 0.9 }} style={styles.viewShotContainer}>
+          <View style={styles.ticketContainer}>
+            <View style={styles.ticketBackground}>
+              <View style={styles.goldFoil} />
+              <View style={styles.ticketContent}>
+                <View style={styles.ticketHeader}>
+                  <Text style={styles.cinemaName}>GALAXY CINEMA</Text>
+                  <Text style={styles.ticketSubtitle}>Trải nghiệm điện ảnh cao cấp</Text>
+                </View>
 
-              <View style={styles.movieInfo}>
-                <Text style={styles.movieTitle}>{bookingData.ticketInfo.movie}</Text>
-                <View style={styles.movieMeta}>
-                  <View style={styles.metaItem}>
-                    <Calendar size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{formatDateDisplay(bookingData.ticketInfo.date)}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Clock size={16} color="#FFD700" />
-                    <Text style={styles.metaText}>{bookingData.ticketInfo.time}</Text>
+                <View style={styles.movieInfo}>
+                  <Text style={styles.movieTitle}>{bookingData.ticketInfo.movie}</Text>
+                  <View style={styles.movieMeta}>
+                    <View style={styles.metaItem}>
+                      <Calendar size={16} color="#FFD700" />
+                      <Text style={styles.metaText}>{formatDateDisplay(bookingData.ticketInfo.date)}</Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                      <Clock size={16} color="#FFD700" />
+                      <Text style={styles.metaText}>{bookingData.ticketInfo.time}</Text>
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.ticketDetails}>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Rạp:</Text>
-                  <Text style={styles.detailValue}>{bookingData.ticketInfo.cinema}</Text>
+                <View style={styles.ticketDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Rạp:</Text>
+                    <Text style={styles.detailValue}>{bookingData.ticketInfo.cinema}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Địa chỉ:</Text>
+                    <Text style={styles.detailValue}>116 Nguyễn Du, Quận 1, TP.HCM</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Ghế:</Text>
+                    <Text style={styles.detailValue}>{bookingData.ticketInfo.seats.join(', ')}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Mã vé:</Text>
+                    <Text style={styles.detailValue}>{bookingData._id}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Trạng thái:</Text>
+                    <Text style={[
+                      styles.detailValue, 
+                      bookingData.paymentStatus === 'paid' ? styles.paidStatus : styles.pendingStatus
+                    ]}>
+                      {bookingData.paymentStatus === 'paid' ? 'ĐÃ THANH TOÁN' : 'CHƯA THANH TOÁN'}
+                    </Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Tổng tiền:</Text>
+                    <Text style={styles.detailValue}>
+                      {bookingData.finalTotal.toLocaleString('vi-VN')} VNĐ
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Địa chỉ:</Text>
-                  <Text style={styles.detailValue}>116 Nguyễn Du, Quận 1, TP.HCM</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Ghế:</Text>
-                  <Text style={styles.detailValue}>{bookingData.ticketInfo.seats.join(', ')}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Mã vé:</Text>
-                  <Text style={styles.detailValue}>{bookingData._id}</Text>
-                </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Trạng thái:</Text>
-                  <Text style={[
-                    styles.detailValue, 
-                    bookingData.paymentStatus === 'paid' ? styles.paidStatus : styles.pendingStatus
-                  ]}>
-                    {bookingData.paymentStatus === 'paid' ? 'ĐÃ THANH TOÁN' : 'CHƯA THANH TOÁN'}
+
+                <View style={styles.qrSection}>
+                  <View style={styles.qrContainer}>
+                    <Image 
+                      source={{ 
+                        uri: bookingData.qrCodeDataUrl || 'https://images.pexels.com/photos/8369648/pexels-photo-8369648.jpeg?auto=compress&cs=tinysrgb&w=200&h=200'
+                      }} 
+                      style={styles.qrCode} 
+                    />
+                    <View style={styles.qrBorder} />
+                  </View>
+                  <Text style={styles.qrText}>
+                    Vui lòng xuất trình mã QR này tại quầy vé
                   </Text>
                 </View>
-                <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Tổng tiền:</Text>
-                  <Text style={styles.detailValue}>
-                    {bookingData.finalTotal.toLocaleString('vi-VN')} VNĐ
-                  </Text>
-                </View>
-              </View>
 
-              <View style={styles.qrSection}>
-                <View style={styles.qrContainer}>
-                  <Image 
-                    source={{ 
-                      uri: bookingData.qrCodeDataUrl || 'https://images.pexels.com/photos/8369648/pexels-photo-8369648.jpeg?auto=compress&cs=tinysrgb&w=200&h=200'
-                    }} 
-                    style={styles.qrCode} 
-                  />
-                  <View style={styles.qrBorder} />
-                </View>
-                <Text style={styles.qrText}>
-                  Vui lòng xuất trình mã QR này tại quầy vé
-                </Text>
-              </View>
-
-              <View style={[
-                styles.validBadge,
-                bookingData.paymentStatus === 'paid' ? styles.validBadgePaid : styles.validBadgePending
-              ]}>
-                <Star size={16} color={bookingData.paymentStatus === 'paid' ? "#FFD700" : "#FF6B6B"} />
-                <Text style={[
-                  styles.validText,
-                  bookingData.paymentStatus === 'paid' ? styles.validTextPaid : styles.validTextPending
+                <View style={[
+                  styles.validBadge,
+                  bookingData.paymentStatus === 'paid' ? styles.validBadgePaid : styles.validBadgePending
                 ]}>
-                  {bookingData.paymentStatus === 'paid' ? 'VÉ HỢP LỆ' : 'CHƯA THANH TOÁN'}
-                </Text>
+                  <Star size={16} color={bookingData.paymentStatus === 'paid' ? "#FFD700" : "#FF6B6B"} />
+                  <Text style={[
+                    styles.validText,
+                    bookingData.paymentStatus === 'paid' ? styles.validTextPaid : styles.validTextPending
+                  ]}>
+                    {bookingData.paymentStatus === 'paid' ? 'VÉ HỢP LỆ' : 'CHƯA THANH TOÁN'}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
-        </View>
+        </ViewShot>
 
         <View style={styles.instructions}>
           <Text style={styles.instructionsTitle}>Hướng dẫn sử dụng</Text>
@@ -309,6 +365,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  viewShotContainer: {
+    backgroundColor: 'transparent',
   },
   ticketContainer: {
     paddingHorizontal: 20,

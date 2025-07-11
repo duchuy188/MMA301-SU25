@@ -1,15 +1,16 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Crown, Monitor, Tag, X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { getSeatsByScreeningId } from '../services/seat';
 import { createBooking, getBookings, updateBooking } from '../services/booking';
 import { useLocalSearchParams } from 'expo-router';
 import { getScreeningById } from '../services/screening';
 import { getMovieById } from '../services/movie';
 import { getTheaterById } from '../services/theater';
-import { validatePromotionCode, getAllPromotions, Promotion } from '../services/promotion';
+import { validatePromotionCode, getAllPromotions, Promotion, getPromotionById } from '../services/promotion';
 import { getCurrentUser } from '../services/auth';
+import { useFocusEffect } from '@react-navigation/native';
 
 const seatMap = Array.from({ length: 8 }, (_, rowIdx) =>
   Array.from({ length: 8 }, (_, colIdx) =>
@@ -109,9 +110,9 @@ export default function SeatSelectionScreen() {
           });
         }
         
-        const occupied = seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber);
-        const vip = seats.filter(s => s.type === 'vip').map(s => s.seatNumber);
-        const pending = seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber);
+        const occupied = [...new Set(seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber))];
+        const vip = [...new Set(seats.filter(s => s.type === 'vip').map(s => s.seatNumber))];
+        const pending = [...new Set(seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber))];
         
         setOccupiedSeats(occupied);
         setVipSeats(vip);
@@ -149,13 +150,20 @@ export default function SeatSelectionScreen() {
     
     setIsLoadingPromo(true);
     try {
-      const response = await validatePromotionCode(promoCode.trim());
+      const response = await validatePromotionCode(
+        promoCode.trim(),
+        ticketPrice,
+        selectedSeats.length
+      );
       
       // Check if response has promotion data directly or in nested format
       let promotion: Promotion | null = null;
-      if (response.success && response.data) {
-        // Format: {success: true, data: promotion}
-        promotion = response.data;
+      if (response.isValid) {
+        // Need to fetch the actual promotion after validation
+        const promotionData = await getPromotionById(promoCode.trim());
+        if (promotionData.success && promotionData.data) {
+          promotion = promotionData.data;
+        }
       } else if ((response as any)._id && (response as any).code) {
         // Format: promotion object directly
         promotion = response as any as Promotion;
@@ -257,11 +265,19 @@ export default function SeatSelectionScreen() {
         // Validate mã khuyến mãi một lần nữa trước khi tạo booking
         if (appliedPromo?.code) {
           try {
-            const validationResponse = await validatePromotionCode(appliedPromo.code);
+            const validationResponse = await validatePromotionCode(
+              appliedPromo.code,
+              ticketPrice,
+              selectedSeats.length
+            );
             
             let validPromotion: Promotion | null = null;
-            if (validationResponse.success && validationResponse.data) {
-              validPromotion = validationResponse.data;
+            if (validationResponse.isValid) {
+              // Need to fetch the actual promotion after validation
+              const promotionData = await getPromotionById(appliedPromo.code);
+              if (promotionData.success && promotionData.data) {
+                validPromotion = promotionData.data;
+              }
             } else if ((validationResponse as any)._id && (validationResponse as any).code) {
               validPromotion = validationResponse as any as Promotion;
             }
@@ -404,6 +420,62 @@ export default function SeatSelectionScreen() {
     return selectedSeats.length * ticketPrice;
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      // Reset selected seats when screen is focused
+      setSelectedSeats([]);
+      setAppliedPromo(null);
+      setDiscount(0);
+      setPromoCode('');
+      
+      // Tải lại danh sách ghế khi màn hình được focus
+      if (screeningId) {
+        const fetchSeats = async () => {
+          try {
+            // Thử lấy từ seat API trước
+            let seats = await getSeatsByScreeningId(screeningId as string);
+            
+            // Nếu seat API không có dữ liệu, fallback sang booking API
+            if (!seats || seats.length === 0) {
+              const response = await getBookings({ screeningId: screeningId as string });
+              
+              // Lấy mảng bookings từ response
+              const bookings = response.bookings || [];
+              
+              // Convert bookings to seat format
+              seats = [];
+              bookings.forEach((booking: any) => {
+                if (booking.seatNumbers && booking.seatNumbers.length > 0) {
+                  booking.seatNumbers.forEach((seatNumber: string) => {
+                    seats.push({
+                      seatNumber: seatNumber,
+                      status: booking.paymentStatus === 'cancelled' ? 'available' : 
+                              booking.paymentStatus === 'pending' ? 'pending' : 'occupied',
+                      type: 'regular' // Default type
+                    });
+                  });
+                }
+              });
+            }
+            
+            const occupied = [...new Set(seats.filter(s => s.status === 'occupied' || s.status === 'booked').map(s => s.seatNumber))];
+            const vip = [...new Set(seats.filter(s => s.type === 'vip').map(s => s.seatNumber))];
+            const pending = [...new Set(seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber))];
+            
+            setOccupiedSeats(occupied);
+            setVipSeats(vip);
+            setPendingSeats(pending);
+          } catch (error) {
+            // Xử lý lỗi mà không hiển thị console.error
+          }
+        };
+        
+        fetchSeats();
+      }
+      return () => {};
+    }, [screeningId])
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -518,7 +590,7 @@ export default function SeatSelectionScreen() {
           )}
           
           {/* Gợi ý mã khuyến mãi */}
-          {availablePromotions.length > 0 && !appliedPromo && (
+          {/* {availablePromotions.length > 0 && !appliedPromo && (
             <View style={styles.promoSuggestions}>
               <Text style={styles.promoSuggestionsTitle}>Mã khuyến mãi có sẵn:</Text>
               {availablePromotions.slice(0, 3).map((promotion) => (
@@ -532,7 +604,7 @@ export default function SeatSelectionScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-          )}
+          )} */}
         </View>
 
         {selectedSeats.length > 0 && (

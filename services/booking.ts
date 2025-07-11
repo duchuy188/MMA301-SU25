@@ -100,7 +100,11 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 export const getBookings = async (filters?: BookingFilters): Promise<any> => {
     try {
-        const response = await api.get('/bookings', { params: filters });
+        // Thêm timestamp để tránh cache
+        const timestamp = new Date().getTime();
+        const params = { ...filters, _t: timestamp };
+        
+        const response = await api.get('/bookings', { params });
         return response.data.data || response.data.bookings || response.data || [];
     } catch (error: any) {
         if (error.response) {

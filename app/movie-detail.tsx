@@ -35,7 +35,10 @@ export default function MovieDetailScreen() {
   }, [movieId]);
 
   const handleBookTicket = () => {
-    router.push('/cinema-selection');
+    router.push({
+      pathname: '/cinema-selection',
+      params: { movieId: movieId }
+    });
   };
 
   // Tạo hàm để chuyển đổi URL YouTube thành embed URL

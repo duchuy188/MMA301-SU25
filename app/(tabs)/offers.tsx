@@ -116,7 +116,7 @@ export default function OffersScreen() {
                 <View style={styles.offerImageContainer}>
                   <Image 
                     source={{ 
-                      uri: 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400&h=200' 
+                      uri: promotion.posterUrl || 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400&h=200'
                     }} 
                     style={styles.offerImage} 
                   />
@@ -309,6 +309,14 @@ const styles = StyleSheet.create({
   noOffersText: {
     fontFamily: 'Montserrat-Regular',
     fontSize: 16,
+    color: '#999',
+  },
+  usageContainer: {
+    marginTop: 4,
+  },
+  usageText: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
     color: '#999',
   }
 });

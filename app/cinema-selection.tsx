@@ -1,62 +1,40 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
-import { ArrowLeft, MapPin, Star, Crown, Monitor } from 'lucide-react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { ArrowLeft, MapPin, Star } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { Theater, getTheaters } from '../services/theater';
-
-const cinemas = [
-  {
-    id: '1',
-    name: 'Galaxy Cinema Nguyễn Du',
-    address: '116 Nguyễn Du, Quận 1, TP.HCM',
-    distance: '1.2 km',
-    rating: 4.8,
-    features: ['VIP', 'Ghế ngả', 'Bar'],
-    available: true,
-    isVIP: true,
-  },
-  {
-    id: '2',
-    name: 'Galaxy Cinema Landmark',
-    address: '5B Tôn Đức Thắng, Quận 1, TP.HCM',
-    distance: '2.1 km',
-    rating: 4.6,
-    features: ['Ghế ngả', 'Màn hình lớn'],
-    available: true,
-    isVIP: false,
-  },
-  {
-    id: '3',
-    name: 'Galaxy Cinema Vincom',
-    address: '72 Lê Thánh Tôn, Quận 1, TP.HCM',
-    distance: '1.8 km',
-    rating: 4.9,
-    features: ['VIP', 'Ghế ngả', 'Bar', 'Màn hình lớn'],
-    available: false,
-    isVIP: true,
-  },
-  {
-    id: '4',
-    name: 'Galaxy Cinema Crescent',
-    address: '101 Tôn Dật Tiên, Quận 7, TP.HCM',
-    distance: '5.3 km',
-    rating: 4.7,
-    features: ['Ghế ngả', 'Bar'],
-    available: true,
-    isVIP: false,
-  },
-];
+import { Room, getRooms } from '../services/room';
 
 export default function CinemaSelectionScreen() {
+  const params = useLocalSearchParams();
   const [theaters, setTheaters] = useState<Theater[]>([]);
+  const [theaterRooms, setTheaterRooms] = useState<{[key: string]: number}>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchTheaters = async () => {
     try {
       setLoading(true);
-      const data = await getTheaters();
-      setTheaters(data);
+      const theaterData = await getTheaters();
+      setTheaters(theaterData);
+      
+      // Fetch all rooms
+      const rooms = await getRooms();
+      
+      // Count rooms for each theater
+      const roomCounts: {[key: string]: number} = {};
+      rooms.forEach(room => {
+        if (room.theaterId) {
+          // Extract the theater ID whether it's an object or string
+          const theaterId = typeof room.theaterId === 'object' 
+            ? room.theaterId._id 
+            : room.theaterId;
+            
+          roomCounts[theaterId] = (roomCounts[theaterId] || 0) + 1;
+        }
+      });
+      
+      setTheaterRooms(roomCounts);
     } catch (err) {
       setError('Không thể tải danh sách rạp. Vui lòng thử lại sau.');
       console.error('Error fetching theaters:', err);
@@ -73,7 +51,10 @@ export default function CinemaSelectionScreen() {
     if (theater.status) {
       router.push({
         pathname: '/datetime-selection',
-        params: { theaterId: theater._id },
+        params: { 
+          theaterId: theater._id,
+          movieId: params.movieId
+        },
       });
     }
   };
@@ -149,7 +130,9 @@ export default function CinemaSelectionScreen() {
                 <View style={styles.metaRow}>
                   <View style={styles.ratingContainer}>
                     <Star size={14} color="#FFD700" />
-                    <Text style={styles.ratingText}>{theater.screens || '7'} phòng</Text>
+                    <Text style={styles.ratingText}>
+                      {theaterRooms[theater._id] || theater.screens || 0} phòng
+                    </Text>
                   </View>
                 </View>
                 

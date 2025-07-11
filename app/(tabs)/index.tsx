@@ -172,7 +172,7 @@ export default function HomeScreen() {
               const randomPromotion1 = shuffledPromotions[0];
               bannerItems.push({
                 id: `promo-${randomPromotion1._id}`,
-                imageUrl: 'https://www.galaxycine.vn/media/2023/2/16/n3-glx-t2-2023-digital-1350x540_1676542684481.jpg',
+                imageUrl: randomPromotion1.posterUrl || 'https://www.galaxycine.vn/media/2023/2/16/n3-glx-t2-2023-digital-1350x540_1676542684481.jpg',
                 title: randomPromotion1.name,
                 description: randomPromotion1.description,
                 type: 'promotion',
@@ -184,7 +184,7 @@ export default function HomeScreen() {
                 const randomPromotion2 = shuffledPromotions[1];
                 bannerItems.push({
                   id: `promo-${randomPromotion2._id}`,
-                  imageUrl: 'https://www.galaxycine.vn/media/2023/7/10/1350x540_1688978822286.jpg',
+                  imageUrl: randomPromotion2.posterUrl || 'https://www.galaxycine.vn/media/2023/7/10/1350x540_1688978822286.jpg',
                   title: randomPromotion2.name,
                   description: randomPromotion2.description,
                   type: 'promotion',

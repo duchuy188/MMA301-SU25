@@ -4,7 +4,7 @@ import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode } from 'lucide-react-
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus } from '../services/booking';
-
+import React from 'react';
 interface TicketInfo {
   movie: string;
   cinema: string;
@@ -422,7 +422,8 @@ export default function PaymentScreen() {
           {
             text: 'Xem vé',
             onPress: () => {
-              router.push({
+              // Thay đổi từ router.push sang router.replace
+              router.replace({
                 pathname: '/e-ticket',
                 params: {
                   bookingId: bookingData._id,

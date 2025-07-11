@@ -17,7 +17,9 @@ export interface Promotion {
     approvedBy?: string | null;
     createdAt: string;
     updatedAt: string;
-    __v?: number;
+    posterUrl?: string;
+    maxUsage: number;     
+    currentUsage: number;  
 }
 
 export interface ApiResponse<T> {
@@ -25,6 +27,12 @@ export interface ApiResponse<T> {
     message: string;
     data?: T;
     count?: number;
+}
+
+export interface PromotionValidationResponse {
+    isValid: boolean;
+    discountedPrice?: number;
+    message: string;
 }
 
 // Get all promotions
@@ -59,11 +67,15 @@ export const getPromotionById = async (id: string): Promise<ApiResponse<Promotio
 };
 
 // Validate promotion code
-export const validatePromotionCode = async (code: string): Promise<ApiResponse<Promotion>> => {
+export const validatePromotionCode = async (
+    code: string,
+    ticketPrice: number,
+    numberOfSeats: number
+): Promise<PromotionValidationResponse> => {
     try {
         await loadAuthTokens();
         
-        const response = await api.post('/promotions/validate', { code });
+        const response = await api.post('/api/promotions/validate', { code });
         
         return response.data;
     } catch (error: any) {

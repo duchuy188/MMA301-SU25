@@ -1,7 +1,10 @@
 import { Tabs } from 'expo-router';
 import { Film, Ticket, Gift, User, MessageSquare } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  
   return (
     <Tabs
       screenOptions={{
@@ -9,8 +12,8 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: '#000000',
           borderTopColor: '#333',
-          height: 60,
-          paddingBottom: 10,
+          height: 60 + insets.bottom,
+          paddingBottom: 10 + insets.bottom,
         },
         tabBarActiveTintColor: '#FFD700',
         tabBarInactiveTintColor: '#999',
