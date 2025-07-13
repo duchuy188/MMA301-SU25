@@ -48,6 +48,11 @@ export default function SeatSelectionScreen() {
   const [availablePromotions, setAvailablePromotions] = useState<Promotion[]>([]);
   const [isLoadingPromo, setIsLoadingPromo] = useState(false);
 
+  // Check if we're in update mode
+  const isUpdating = params.isUpdating === 'true';
+  const existingBookingId = params.bookingId as string;
+  const currentSeats = params.currentSeats ? JSON.parse(params.currentSeats as string) : [];
+
   useEffect(() => {
     if (!screeningId) return;
     
@@ -113,9 +118,23 @@ export default function SeatSelectionScreen() {
         const vip = seats.filter(s => s.type === 'vip').map(s => s.seatNumber);
         const pending = seats.filter(s => s.status === 'reserved' || s.status === 'pending').map(s => s.seatNumber);
         
-        setOccupiedSeats(occupied);
-        setVipSeats(vip);
-        setPendingSeats(pending);
+        // If in update mode, exclude current booking's seats from occupied list
+        if (isUpdating && existingBookingId && currentSeats.length > 0) {
+          // Remove current booking's seats from occupied and pending lists
+          const occupiedFiltered = occupied.filter(seat => !currentSeats.includes(seat));
+          const pendingFiltered = pending.filter(seat => !currentSeats.includes(seat));
+          
+          setOccupiedSeats(occupiedFiltered);
+          setPendingSeats(pendingFiltered);
+          setVipSeats(vip);
+          
+          // Pre-select the current seats
+          setSelectedSeats(currentSeats);
+        } else {
+          setOccupiedSeats(occupied);
+          setVipSeats(vip);
+          setPendingSeats(pending);
+        }
       } catch (error) {
         // Continue with empty seat data if there's an error
       }
@@ -282,36 +301,72 @@ export default function SeatSelectionScreen() {
         const baseTotal = selectedSeats.length * ticketPrice;
         const finalTotal = calculateTotal();
         
-        const bookingData: any = {
-          userId: userId,
-          screeningId: screening._id,
-          seatNumbers: selectedSeats,
-          paymentStatus: 'pending',
-          totalPrice: finalTotal,
-        };
-        
-        // Thêm promotion code nếu có - QUAN TRỌNG: chỉ thêm khi có mã khuyến mãi
-        if (appliedPromo?.code) {
-          bookingData.code = appliedPromo.code; // Sử dụng mã khuyến mãi làm code
-          bookingData.promotionId = appliedPromo._id;
-          bookingData.discountAmount = discount;
-        } else {
-          // QUAN TRỌNG: Khi không có mã khuyến mãi, code sẽ là null
-          bookingData.code = null;
-        }
-        
-        const pendingBooking = await createBooking(bookingData);
-        
-        // Check for booking ID in different possible locations
         let bookingId = null;
-        if (pendingBooking?._id) {
-          bookingId = pendingBooking._id;
-        } else if (pendingBooking?.data?._id) {
-          bookingId = pendingBooking.data._id;
-        } else if (pendingBooking?.booking?._id) {
-          bookingId = pendingBooking.booking._id;
-        } else if (pendingBooking?.id) {
-          bookingId = pendingBooking.id;
+        
+        if (isUpdating && existingBookingId) {
+          // Update existing booking instead of creating new one
+          console.log('🔄 Updating existing booking:', existingBookingId);
+          console.log('🔄 New seats:', selectedSeats);
+          console.log('🔄 Previous seats:', currentSeats);
+          
+          const updateData: any = {
+            seatNumbers: selectedSeats,
+            totalPrice: finalTotal,
+            basePrice: baseTotal,
+            discount: discount,
+            paymentStatus: 'pending', // Keep as pending until payment
+          };
+          
+          // Thêm promotion code nếu có
+          if (appliedPromo?.code) {
+            updateData.code = appliedPromo.code;
+            updateData.promotionId = appliedPromo._id;
+            updateData.discountAmount = discount;
+          } else {
+            updateData.code = null;
+            updateData.promotionId = null;
+            updateData.discountAmount = 0;
+          }
+          
+          const updatedBooking = await updateBooking(existingBookingId, updateData);
+          console.log('✅ Booking updated successfully:', updatedBooking);
+          bookingId = existingBookingId; // Use the existing booking ID
+          
+        } else {
+          // Create new booking
+          console.log('🆕 Creating new booking');
+          const bookingData: any = {
+            userId: userId,
+            screeningId: screening._id,
+            seatNumbers: selectedSeats,
+            paymentStatus: 'pending',
+            totalPrice: finalTotal,
+            basePrice: baseTotal,
+            discount: discount,
+          };
+          
+          // Thêm promotion code nếu có - QUAN TRỌNG: chỉ thêm khi có mã khuyến mãi
+          if (appliedPromo?.code) {
+            bookingData.code = appliedPromo.code; // Sử dụng mã khuyến mãi làm code
+            bookingData.promotionId = appliedPromo._id;
+            bookingData.discountAmount = discount;
+          } else {
+            // QUAN TRỌNG: Khi không có mã khuyến mãi, code sẽ là null
+            bookingData.code = null;
+          }
+          
+          const pendingBooking = await createBooking(bookingData);
+          
+          // Check for booking ID in different possible locations
+          if (pendingBooking?._id) {
+            bookingId = pendingBooking._id;
+          } else if (pendingBooking?.data?._id) {
+            bookingId = pendingBooking.data._id;
+          } else if (pendingBooking?.booking?._id) {
+            bookingId = pendingBooking.booking._id;
+          } else if (pendingBooking?.id) {
+            bookingId = pendingBooking.id;
+          }
         }
         
         if (!bookingId) {
@@ -410,8 +465,21 @@ export default function SeatSelectionScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft size={24} color="#FFD700" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Chọn ghế</Text>
+        <Text style={styles.headerTitle}>
+          {isUpdating ? 'Cập nhật ghế' : 'Chọn ghế'}
+        </Text>
       </View>
+
+      {isUpdating && (
+        <View style={styles.updateNotice}>
+          <Text style={styles.updateNoticeText}>
+            🔄 Bạn đang cập nhật booking hiện tại
+          </Text>
+          <Text style={styles.updateNoticeSubtext}>
+            Ghế hiện tại: {currentSeats.join(', ')}
+          </Text>
+        </View>
+      )}
 
       <ScrollView style={styles.content}>
         <View style={styles.screenContainer}>
@@ -581,12 +649,14 @@ export default function SeatSelectionScreen() {
             {isCreatingBooking ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#000000" />
-                <Text style={styles.continueButtonText}>Đang tạo booking...</Text>
+                <Text style={styles.continueButtonText}>
+                  {isUpdating ? 'Đang cập nhật...' : 'Đang tạo booking...'}
+                </Text>
               </View>
             ) : (
               <View style={styles.continueButtonContent}>
                 <Text style={styles.continueButtonText}>
-                  Tiếp tục ({selectedSeats.length} ghế)
+                  {isUpdating ? 'Cập nhật ghế' : 'Tiếp tục'} ({selectedSeats.length} ghế)
                 </Text>
                 <Text style={styles.continueButtonPrice}>
                   {calculateTotal().toLocaleString('vi-VN')} VNĐ
@@ -997,6 +1067,27 @@ const styles = StyleSheet.create({
   promoSuggestionDesc: {
     fontFamily: 'Montserrat-Regular',
     fontSize: 10,
+    color: '#999',
+  },
+  // Update notice styles
+  updateNotice: {
+    backgroundColor: '#1A1A1A',
+    marginHorizontal: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    marginBottom: 20,
+  },
+  updateNoticeText: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  updateNoticeSubtext: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
     color: '#999',
   },
 });

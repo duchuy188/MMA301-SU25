@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode } from 'lucide-react-native';
+import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode, Edit3, X } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus } from '../services/booking';
+import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus, cancelBooking, updateBooking } from '../services/booking';
 
 interface TicketInfo {
   movie: string;
@@ -468,6 +468,83 @@ export default function PaymentScreen() {
     }
   };
 
+  const handleCancelBooking = async () => {
+    if (!ticketInfo?.bookingId) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin đặt vé để hủy.');
+      return;
+    }
+
+    Alert.alert(
+      'Xác nhận hủy vé',
+      'Bạn có chắc chắn muốn hủy đặt vé này không? Hành động này không thể hoàn tác.',
+      [
+        {
+          text: 'Không',
+          style: 'cancel',
+        },
+        {
+          text: 'Hủy vé',
+          style: 'destructive',
+          onPress: async () => {
+            setIsLoading(true);
+            try {
+              const result = await cancelBooking(ticketInfo.bookingId!);
+              
+              if (result.success) {
+                Alert.alert(
+                  'Hủy vé thành công',
+                  result.message || 'Vé của bạn đã được hủy thành công.',
+                  [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        // Navigate to home screen instead of going back
+                        router.push('/(tabs)');
+                      }
+                    }
+                  ]
+                );
+              } else {
+                throw new Error(result.message || 'Không thể hủy vé');
+              }
+            } catch (error: any) {
+              Alert.alert(
+                'Lỗi hủy vé',
+                error.message || 'Có lỗi xảy ra khi hủy vé. Vui lòng thử lại.',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleUpdateBooking = async () => {
+    if (!ticketInfo?.bookingId) {
+      Alert.alert('Lỗi', 'Không tìm thấy thông tin đặt vé để cập nhật.');
+      return;
+    }
+
+    // Navigate to seat selection screen to update seats
+    router.push({
+      pathname: '/seat-selection',
+      params: {
+        screeningId: ticketInfo.screeningId,
+        movieTitle: ticketInfo.movie,
+        cinemaName: ticketInfo.cinema,
+        selectedDate: ticketInfo.date,
+        selectedTime: ticketInfo.time,
+        ticketPrice: (ticketInfo.baseTotal || ticketInfo.ticketPrice).toString(),
+        isUpdating: 'true',
+        bookingId: ticketInfo.bookingId,
+        currentSeats: JSON.stringify(ticketInfo.seats),
+      }
+    });
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -582,6 +659,33 @@ export default function PaymentScreen() {
           </ScrollView>
 
           <View style={styles.footer}>
+            {/* Show update and cancel buttons only if we have a booking ID (existing booking) */}
+            {ticketInfo?.bookingId && (
+              <View style={styles.actionButtonsRow}>
+                <TouchableOpacity 
+                  style={[styles.updateButton, isLoading && styles.buttonDisabled]} 
+                  onPress={handleUpdateBooking}
+                  disabled={isLoading}
+                >
+                  <View style={styles.buttonContent}>
+                    <Edit3 size={16} color="#FFFFFF" />
+                    <Text style={styles.updateButtonText}>CẬP NHẬT VÉ</Text>
+                  </View>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.cancelButton, isLoading && styles.buttonDisabled]} 
+                  onPress={handleCancelBooking}
+                  disabled={isLoading}
+                >
+                  <View style={styles.buttonContent}>
+                    <X size={16} color="#FF3B30" />
+                    <Text style={styles.cancelButtonText}>HỦY VÉ</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            )}
+            
             <TouchableOpacity 
               style={[styles.confirmButton, isLoading && styles.confirmButtonDisabled]} 
               onPress={handlePayment}
@@ -591,7 +695,7 @@ export default function PaymentScreen() {
                 <ActivityIndicator size="small" color="#000000" />
               ) : (
                 <Text style={styles.confirmButtonText}>
-                  XÁC NHẬN THANH TOÁN
+                  {ticketInfo?.bookingId ? 'XÁC NHẬN THANH TOÁN' : 'ĐẶT VÉ NGAY'}
                 </Text>
               )}
             </TouchableOpacity>
@@ -854,5 +958,49 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Medium',
     fontSize: 14,
     color: '#4CAF50',
+  },
+  // Action buttons styles
+  actionButtonsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  updateButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  updateButtonText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 14,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  cancelButtonText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 14,
+    color: '#FF3B30',
+    letterSpacing: 0.5,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });
