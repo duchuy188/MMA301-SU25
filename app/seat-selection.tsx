@@ -1,13 +1,16 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, Crown, Monitor, Tag, X } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getSeatsByScreeningId } from '../services/seat';
 import { createBooking, getBookings, updateBooking } from '../services/booking';
 import { useLocalSearchParams } from 'expo-router';
 import { getScreeningById } from '../services/screening';
 import { getMovieById } from '../services/movie';
 import { getTheaterById } from '../services/theater';
+import { cancelBooking } from '../services/booking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { validatePromotionCode, getAllPromotions, Promotion } from '../services/promotion';
 import { getCurrentUser } from '../services/auth';
 
@@ -236,9 +239,48 @@ export default function SeatSelectionScreen() {
     if (occupiedSeats.includes(seatId)) return;
     
     if (selectedSeats.includes(seatId)) {
-      setSelectedSeats(selectedSeats.filter(seat => seat !== seatId));
+      const newSelectedSeats = selectedSeats.filter(seat => seat !== seatId);
+      setSelectedSeats(newSelectedSeats);
+      
+      // Nếu không còn ghế nào được chọn, xóa mã khuyến mãi
+      if (newSelectedSeats.length === 0) {
+        setAppliedPromo(null);
+        setDiscount(0);
+        setPromoCode('');
+      } else {
+        // Nếu còn ghế được chọn, tính lại discount
+        if (appliedPromo) {
+          const currentTotal = newSelectedSeats.length * ticketPrice;
+          let discountAmount = 0;
+          
+          if (appliedPromo.type === 'percent') {
+            discountAmount = Math.round((currentTotal * appliedPromo.value) / 100);
+          } else if (appliedPromo.type === 'fixed') {
+            discountAmount = appliedPromo.value;
+          }
+          
+          discountAmount = Math.min(discountAmount, currentTotal);
+          setDiscount(discountAmount);
+        }
+      }
     } else {
-      setSelectedSeats([...selectedSeats, seatId]);
+      const newSelectedSeats = [...selectedSeats, seatId];
+      setSelectedSeats(newSelectedSeats);
+      
+      // Nếu có mã khuyến mãi được áp dụng, tính lại discount với số ghế mới
+      if (appliedPromo) {
+        const currentTotal = newSelectedSeats.length * ticketPrice;
+        let discountAmount = 0;
+        
+        if (appliedPromo.type === 'percent') {
+          discountAmount = Math.round((currentTotal * appliedPromo.value) / 100);
+        } else if (appliedPromo.type === 'fixed') {
+          discountAmount = appliedPromo.value;
+        }
+        
+        discountAmount = Math.min(discountAmount, currentTotal);
+        setDiscount(discountAmount);
+      }
     }
   };
 
@@ -331,6 +373,8 @@ export default function SeatSelectionScreen() {
           const updatedBooking = await updateBooking(existingBookingId, updateData);
           console.log('✅ Booking updated successfully:', updatedBooking);
           bookingId = existingBookingId; // Use the existing booking ID
+          
+          // Don't stop timer here - let it continue to payment screen
           
         } else {
           // Create new booking
@@ -470,17 +514,6 @@ export default function SeatSelectionScreen() {
         </Text>
       </View>
 
-      {isUpdating && (
-        <View style={styles.updateNotice}>
-          <Text style={styles.updateNoticeText}>
-            🔄 Bạn đang cập nhật booking hiện tại
-          </Text>
-          <Text style={styles.updateNoticeSubtext}>
-            Ghế hiện tại: {currentSeats.join(', ')}
-          </Text>
-        </View>
-      )}
-
       <ScrollView style={styles.content}>
         <View style={styles.screenContainer}>
           <View style={styles.screen}>
@@ -542,7 +575,12 @@ export default function SeatSelectionScreen() {
         {/* Phần mã khuyến mãi */}
         <View style={styles.promoSection}>
           <Text style={styles.promoSectionTitle}>Mã khuyến mãi (tùy chọn)</Text>
-          <Text style={styles.promoDescription}>Bỏ trống nếu không có mã khuyến mãi</Text>
+          <Text style={styles.promoDescription}>
+            {selectedSeats.length === 0 
+              ? 'Vui lòng chọn ghế trước khi áp dụng mã khuyến mãi' 
+              : 'Bỏ trống nếu không có mã khuyến mãi'
+            }
+          </Text>
           
           {appliedPromo ? (
             <View style={styles.appliedPromo}>
@@ -564,17 +602,24 @@ export default function SeatSelectionScreen() {
           ) : (
             <View style={styles.promoInput}>
               <TextInput
-                style={styles.promoTextInput}
-                placeholder="Nhập mã khuyến mãi"
-                placeholderTextColor="#666"
+                style={[
+                  styles.promoTextInput,
+                  selectedSeats.length === 0 && styles.promoTextInputDisabled
+                ]}
+                placeholder={selectedSeats.length === 0 ? "Chọn ghế trước để nhập mã" : "Nhập mã khuyến mãi"}
+                placeholderTextColor={selectedSeats.length === 0 ? "#444" : "#666"}
                 value={promoCode}
                 onChangeText={setPromoCode}
                 autoCapitalize="characters"
+                editable={selectedSeats.length > 0}
               />
               <TouchableOpacity 
-                style={[styles.applyPromoButton, (!promoCode.trim() || isLoadingPromo) && styles.applyPromoButtonDisabled]} 
+                style={[
+                  styles.applyPromoButton, 
+                  (!promoCode.trim() || isLoadingPromo || selectedSeats.length === 0) && styles.applyPromoButtonDisabled
+                ]} 
                 onPress={applyPromoCode}
-                disabled={!promoCode.trim() || isLoadingPromo}
+                disabled={!promoCode.trim() || isLoadingPromo || selectedSeats.length === 0}
               >
                 {isLoadingPromo ? (
                   <ActivityIndicator size="small" color="#000000" />
@@ -585,8 +630,8 @@ export default function SeatSelectionScreen() {
             </View>
           )}
           
-          {/* Gợi ý mã khuyến mãi */}
-          {availablePromotions.length > 0 && !appliedPromo && (
+          {/* Gợi ý mã khuyến mãi - chỉ hiện khi đã chọn ghế */}
+          {availablePromotions.length > 0 && !appliedPromo && selectedSeats.length > 0 && (
             <View style={styles.promoSuggestions}>
               <Text style={styles.promoSuggestionsTitle}>Mã khuyến mãi có sẵn:</Text>
               {availablePromotions.slice(0, 3).map((promotion) => (
@@ -1023,6 +1068,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#333',
   },
+  promoTextInputDisabled: {
+    backgroundColor: '#0A0A0A',
+    color: '#444',
+    borderColor: '#222',
+  },
   applyPromoButton: {
     backgroundColor: '#FFD700',
     paddingHorizontal: 20,
@@ -1089,5 +1139,36 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     fontSize: 12,
     color: '#999',
+  },
+  // Timer styles
+  timerContainer: {
+    backgroundColor: '#1A1A1A',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    alignItems: 'center',
+  },
+  timerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  timerText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 16,
+    color: '#FFD700',
+  },
+  timerTextUrgent: {
+    color: '#FF3B30',
+  },
+  timerSubtext: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
   },
 });

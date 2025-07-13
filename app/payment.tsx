@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode, Edit3, X } from 'lucide-react-native';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus, cancelBooking, updateBooking } from '../services/booking';
 
@@ -169,6 +169,7 @@ export default function PaymentScreen() {
               finalTotal: finalTotal,
               appliedPromoCode: appliedPromoCode,
             });
+            
             return;
           }
           
@@ -455,11 +456,6 @@ export default function PaymentScreen() {
           {
             text: 'Thử lại',
             onPress: () => {}
-          },
-          {
-            text: 'Quay lại',
-            onPress: () => router.back(),
-            style: 'cancel'
           }
         ]
       );
@@ -548,9 +544,8 @@ export default function PaymentScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color="#FFD700" />
-        </TouchableOpacity>
+        {/* Back button removed - prevent navigation back */}
+        <View style={styles.backButtonPlaceholder} />
         <Text style={styles.headerTitle}>Thanh toán</Text>
       </View>
 
@@ -720,6 +715,11 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 8,
+    marginRight: 12,
+  },
+  backButtonPlaceholder: {
+    width: 40,
+    height: 40,
     marginRight: 12,
   },
   headerTitle: {
@@ -1002,5 +1002,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  // Timer styles
+  timerContainer: {
+    backgroundColor: '#1A1A1A',
+    marginHorizontal: 20,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    alignItems: 'center',
+  },
+  timerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  timerText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 16,
+    color: '#FFD700',
+  },
+  timerTextUrgent: {
+    color: '#FF3B30',
+  },
+  timerSubtext: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    color: '#999',
+    textAlign: 'center',
   },
 });
