@@ -61,7 +61,7 @@ export const register = async (fullName: string, email: string, phone: string, p
   }
 };
 
-export const login = async (email: string, password: string) => {
+export const login = async (email: string, password: string, rememberMe: boolean = false) => {
   try {
     const response = await api.post('/auth/login', {
       email,
@@ -73,8 +73,10 @@ export const login = async (email: string, password: string) => {
       currentUser = response.data.user;
       api.defaults.headers.common['Authorization'] = `Bearer ${currentToken}`;
       
-      // Lưu token vào AsyncStorage
-      await saveAuthTokens(currentToken, currentUser);
+      // Chỉ lưu token vào AsyncStorage nếu rememberMe được bật
+      if (rememberMe) {
+        await saveAuthTokens(currentToken, currentUser);
+      }
     }
     
     return response.data;
