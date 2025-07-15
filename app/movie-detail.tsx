@@ -19,13 +19,46 @@ export default function MovieDetailScreen() {
   const [playing, setPlaying] = useState(false);
   
   // Review states
-  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showCommentModal, setShowCommentModal] = useState(false);
   const [rating, setRating] = useState(0);
+  const [tempRating, setTempRating] = useState(0); // Thêm state mới để lưu rating tạm thời
   const [comment, setComment] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false); // Thêm state cho tùy chọn ẩn danh
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [reviews, setReviews] = useState<MovieReview[]>([]);
   const [userReview, setUserReview] = useState<MovieReview | null>(null);
   const [user, setUser] = useState<any>(null);
+  const [isEditingRating, setIsEditingRating] = useState(false);
+
+  // Load saved rating from AsyncStorage when component mounts
+  useEffect(() => {
+    const loadSavedRating = async () => {
+      try {
+        const savedRating = await AsyncStorage.getItem(`movie_rating_${movieId}`);
+        if (savedRating) {
+          const parsedRating = parseInt(savedRating);
+          setRating(parsedRating);
+          setTempRating(parsedRating);
+        }
+      } catch (error) {
+        console.error('Error loading saved rating:', error);
+      }
+    };
+    loadSavedRating();
+  }, [movieId]);
+
+  // Save rating to AsyncStorage
+  const saveRating = async (newRating: number) => {
+    try {
+      if (newRating === 0) {
+        await AsyncStorage.removeItem(`movie_rating_${movieId}`);
+      } else {
+        await AsyncStorage.setItem(`movie_rating_${movieId}`, newRating.toString());
+      }
+    } catch (error) {
+      console.error('Error saving rating:', error);
+    }
+  };
 
   // Load movie details and reviews
   useEffect(() => {
@@ -99,7 +132,7 @@ export default function MovieDetailScreen() {
     return match && match[2].length === 11 ? match[2] : null;
   };
 
-  const handleSubmitReview = async () => {
+  const handleSubmitRating = async () => {
     const currentUser = getCurrentUser();
     if (!currentUser || !movieId) {
       Toast.show({
@@ -110,7 +143,7 @@ export default function MovieDetailScreen() {
       return;
     }
 
-    if (rating === 0) {
+    if (tempRating === 0) {
       Toast.show({
         type: 'error',
         text1: 'Vui lòng chọn số sao',
@@ -120,11 +153,8 @@ export default function MovieDetailScreen() {
     }
 
     try {
-      // Lấy thông tin người dùng từ AsyncStorage
       const userJson = await AsyncStorage.getItem('auth_user');
-      console.log('User data from AsyncStorage:', userJson);
       const userData = userJson ? JSON.parse(userJson) : null;
-      console.log('Parsed user data:', userData);
       
       if (!userData) {
         Toast.show({
@@ -136,27 +166,26 @@ export default function MovieDetailScreen() {
         return;
       }
 
+      // Get the user's existing review if any
+      const existingReview = reviews.find(review => review.userId === currentUser._id);
+
       const review: MovieReview = {
         userId: currentUser._id,
         movieId: movieId as string,
-        rating,
-        comment: comment.trim(),
-        userName: isAnonymous ? 'Người dùng ẩn danh' : userData.name,
-        userEmail: isAnonymous ? '' : userData.email,
-        isAnonymous,
+        rating: tempRating,
+        comment: existingReview ? existingReview.comment : '',
+        userName: userData.name,
+        userEmail: userData.email,
+        isAnonymous: false,
         createdAt: new Date().toISOString()
       };
 
-      console.log('Review being saved:', review);
-
       const success = await saveMovieReview(review);
       if (success) {
-        // Update reviews list
         const updatedReviews = await getMovieReviews(movieId as string);
         setReviews(updatedReviews);
         setUserReview(review);
         
-        // Update movie's rating
         if (movie) {
           const avgRating = calculateAverageRating(updatedReviews);
           setMovie({
@@ -166,14 +195,13 @@ export default function MovieDetailScreen() {
           });
         }
         
-        setShowReviewModal(false);
-        setRating(0);
-        setComment('');
-        setIsAnonymous(false); // Reset trạng thái ẩn danh
+        setShowRatingModal(false);
+        setRating(tempRating);
+        setIsEditingRating(false);
         
         Toast.show({
           type: 'success',
-          text1: 'Đánh giá thành công',
+          text1: isEditingRating ? 'Cập nhật đánh giá thành công' : 'Đánh giá thành công',
           visibilityTime: 3000,
         });
       }
@@ -187,11 +215,233 @@ export default function MovieDetailScreen() {
     }
   };
 
-  const handleReviewButtonClick = () => {
-    // Reset rating and comment when opening modal
-    setRating(0);
+  const handleSubmitComment = async () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !movieId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Bạn cần đăng nhập để bình luận',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    if (!comment.trim()) {
+      Toast.show({
+        type: 'error',
+        text1: 'Vui lòng nhập bình luận',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    try {
+      const userJson = await AsyncStorage.getItem('auth_user');
+      const userData = userJson ? JSON.parse(userJson) : null;
+      
+      if (!userData) {
+        Toast.show({
+          type: 'error',
+          text1: 'Không thể lấy thông tin người dùng',
+          text2: 'Vui lòng đăng nhập lại',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      // Get the user's existing rating from AsyncStorage
+      const savedRating = await AsyncStorage.getItem(`movie_rating_${movieId}`);
+      const currentRating = savedRating ? parseInt(savedRating) : 0;
+
+      const review: MovieReview = {
+        userId: currentUser._id,
+        movieId: movieId as string,
+        rating: currentRating,
+        comment: comment.trim(),
+        userName: userData.name,
+        userEmail: userData.email,
+        isAnonymous: false,
+        createdAt: new Date().toISOString()
+      };
+
+      const success = await saveMovieReview(review);
+      if (success) {
+        // After successful comment submission, remove the rating from AsyncStorage
+        await AsyncStorage.removeItem(`movie_rating_${movieId}`);
+        setRating(0);
+        setTempRating(0);
+        
+        const updatedReviews = await getMovieReviews(movieId as string);
+        setReviews(updatedReviews);
+        setUserReview(review);
+        
+        setShowCommentModal(false);
+        setComment('');
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Bình luận thành công',
+          visibilityTime: 3000,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể lưu bình luận',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const handleRatingButtonClick = () => {
+    const currentUser = getCurrentUser();
+    const userRating = reviews.find(review => review.userId === currentUser?._id && review.rating > 0);
+    
+    if (userRating) {
+      setTempRating(userRating.rating);
+      setIsEditingRating(true);
+    } else {
+      setTempRating(0);
+      setIsEditingRating(false);
+    }
+    
+    setShowRatingModal(true);
+  };
+
+  const handleUpdateRating = async () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !movieId) return;
+
+    if (tempRating === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Vui lòng chọn số sao',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    try {
+      const userJson = await AsyncStorage.getItem('auth_user');
+      const userData = userJson ? JSON.parse(userJson) : null;
+      
+      if (!userData) {
+        Toast.show({
+          type: 'error',
+          text1: 'Không thể lấy thông tin người dùng',
+          text2: 'Vui lòng đăng nhập lại',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      // Create a new rating review without affecting existing comments
+      const ratingReview: MovieReview = {
+        userId: currentUser._id,
+        movieId: movieId as string,
+        rating: tempRating,
+        comment: '', // No comment for pure rating updates
+        userName: userData.name,
+        userEmail: userData.email,
+        isAnonymous: false,
+        createdAt: new Date().toISOString()
+      };
+
+      const success = await saveMovieReview(ratingReview);
+      if (success) {
+        // Get all reviews to update the average rating
+        const allReviews = await getMovieReviews(movieId as string);
+        
+        // Calculate new average rating including all ratings (with and without comments)
+        if (movie) {
+          const avgRating = calculateAverageRating(allReviews);
+          setMovie({
+            ...movie,
+            rating: avgRating,
+            votes: allReviews.filter(r => r.rating > 0).length
+          });
+        }
+        
+        // Save current rating to AsyncStorage for future comments
+        await AsyncStorage.setItem(`movie_rating_${movieId}`, tempRating.toString());
+        setRating(tempRating);
+        setShowRatingModal(false);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Cập nhật đánh giá thành công',
+          visibilityTime: 3000,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể cập nhật đánh giá',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const handleRemoveRating = async () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !movieId) return;
+
+    try {
+      // Create a review with 0 rating to remove the rating
+      const ratingReview: MovieReview = {
+        userId: currentUser._id,
+        movieId: movieId as string,
+        rating: 0,
+        comment: '', // No comment for rating removal
+        userName: '',
+        userEmail: '',
+        isAnonymous: false,
+        createdAt: new Date().toISOString()
+      };
+
+      const success = await saveMovieReview(ratingReview);
+      if (success) {
+        // Get all reviews to update the average rating
+        const allReviews = await getMovieReviews(movieId as string);
+        
+        // Update movie rating without the removed rating
+        if (movie) {
+          const avgRating = calculateAverageRating(allReviews.filter(r => r.rating > 0));
+          setMovie({
+            ...movie,
+            rating: avgRating,
+            votes: allReviews.filter(r => r.rating > 0).length
+          });
+        }
+        
+        // Remove rating from AsyncStorage
+        await AsyncStorage.removeItem(`movie_rating_${movieId}`);
+        setRating(0);
+        setTempRating(0);
+        setShowRatingModal(false);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Đã xóa đánh giá',
+          visibilityTime: 3000,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể xóa đánh giá',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const handleCommentButtonClick = () => {
     setComment('');
-    setShowReviewModal(true);
+    setIsAnonymous(false);
+    setShowCommentModal(true);
   };
 
   if (loading) {
@@ -336,23 +586,31 @@ export default function MovieDetailScreen() {
 
       {/* Review Section */}
       <View style={styles.reviewSection}>
-        <Text style={styles.sectionTitle}>Đánh giá phim</Text>
+        <Text style={styles.sectionTitle}>Đánh giá và Bình luận</Text>
         
         {getCurrentUser() ? (
-          <TouchableOpacity
-            style={styles.reviewButton}
-            onPress={handleReviewButtonClick}
-          >
-            <Text style={styles.reviewButtonText}>
-              {userReview ? 'Đánh giá' : 'Viết đánh giá'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.ratingButton]}
+              onPress={handleRatingButtonClick}
+            >
+              <Star size={20} color="#000" />
+              <Text style={styles.actionButtonText}>Đánh giá</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={[styles.actionButton, styles.commentButton]}
+              onPress={handleCommentButtonClick}
+            >
+              <Text style={styles.actionButtonText}>Viết bình luận</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <TouchableOpacity
             style={styles.reviewButton}
             onPress={() => router.push('/auth')}
           >
-            <Text style={styles.reviewButtonText}>Đăng nhập để đánh giá</Text>
+            <Text style={styles.reviewButtonText}>Đăng nhập để đánh giá và bình luận</Text>
           </TouchableOpacity>
         )}
 
@@ -360,71 +618,106 @@ export default function MovieDetailScreen() {
         <View style={styles.reviewsList}>
           {reviews
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .map((review, index) => (
-            <View key={index} style={styles.reviewItem}>
-              <View style={styles.reviewHeader}>
-                <View style={styles.reviewerInfo}>
-                  <View style={styles.userNameContainer}>
-                    <Text style={styles.userIcon}>👤</Text>
-                    <Text style={styles.reviewerName} numberOfLines={1}>
-                      {review.isAnonymous ? 'Người dùng ẩn danh' : review.userName}
-                    </Text>
+            .filter(review => review.comment && review.comment.trim() !== '') // Only show reviews with comments
+            .map((review, index) => {
+              const currentUser = getCurrentUser();
+              const isCurrentUserReview = currentUser && review.userId === currentUser._id;
+
+              return (
+                <View key={index} style={styles.reviewItem}>
+                  <View style={styles.reviewHeader}>
+                    <View style={styles.reviewerInfo}>
+                      <View style={styles.userNameContainer}>
+                        <Text style={styles.userIcon}>👤</Text>
+                        <Text style={styles.reviewerName} numberOfLines={1}>
+                          {review.userName}
+                        </Text>
+                      </View>
+                      <Text style={styles.reviewerEmail} numberOfLines={1}>
+                        {review.userEmail}
+                      </Text>
+                      <Text style={styles.reviewDate}>
+                        {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                      </Text>
+                    </View>
+                    {review.rating > 0 && (
+                      <View style={styles.ratingContainer}>
+                        <Star size={16} color="#FFD700" fill="#FFD700" />
+                        <Text style={styles.ratingText}>{review.rating}/10</Text>
+                      </View>
+                    )}
                   </View>
-                  {!review.isAnonymous && (
-                    <Text style={styles.reviewerEmail} numberOfLines={1}>
-                      {review.userEmail}
-                    </Text>
-                  )}
-                  <Text style={styles.reviewDate}>
-                    {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                  <Text style={styles.reviewComment}>
+                    💬 {review.comment}
                   </Text>
                 </View>
-                <View style={styles.ratingContainer}>
-                  <Star size={16} color="#FFD700" fill="#FFD700" />
-                  <Text style={styles.ratingText}>{review.rating}/10</Text>
-                </View>
-              </View>
-              {review.comment && review.comment.trim() !== '' && (
-                <Text style={styles.reviewComment}>
-                  💬 {review.comment}
-                </Text>
-              )}
-            </View>
-          ))}
+              );
+            })}
         </View>
       </View>
 
-      {/* Review Modal */}
+      {/* Rating Modal */}
       <Modal
-        visible={showReviewModal}
+        visible={showRatingModal}
         transparent={true}
         animationType="slide"
       >
         <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Đánh giá phim</Text>
+          <View style={[styles.modalContent, styles.ratingModalContent]}>
+            <Text style={[styles.modalTitle, styles.ratingModalTitle]}>
+              Chỉnh sửa đánh giá
+            </Text>
             
             {/* Rating Stars */}
             <View style={styles.starsContainer}>
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
                 <TouchableOpacity
                   key={star}
-                  onPress={() => setRating(star)}
+                  onPress={() => setTempRating(star)}
                 >
                   <Star
-                    size={30}
+                    size={24}
                     color="#FFD700"
-                    fill={star <= rating ? "#FFD700" : "none"}
+                    fill={star <= tempRating ? "#FFD700" : "none"}
                   />
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={styles.ratingText}>{rating}/10</Text>
+            <Text style={styles.ratingText}>{tempRating}/10</Text>
+
+            {/* Buttons */}
+            <View style={styles.ratingModalButtons}>
+              <TouchableOpacity
+                style={styles.ratingRemoveButton}
+                onPress={handleRemoveRating}
+              >
+                <Text style={styles.ratingButtonText}>Xóa đánh giá</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.ratingSendButton}
+                onPress={handleUpdateRating}
+              >
+                <Text style={styles.ratingButtonText}>Cập nhật</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Comment Modal */}
+      <Modal
+        visible={showCommentModal}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Viết bình luận</Text>
 
             {/* Comment Input */}
             <TextInput
               style={styles.commentInput}
-              placeholder="Viết đánh giá của bạn..."
+              placeholder="Viết bình luận của bạn..."
               multiline
               numberOfLines={4}
               value={comment}
@@ -439,7 +732,7 @@ export default function MovieDetailScreen() {
               <View style={[styles.checkbox, isAnonymous && styles.checkboxChecked]}>
                 {isAnonymous && <Text style={styles.checkmark}>✓</Text>}
               </View>
-              <Text style={styles.anonymousText}>Đánh giá ẩn danh</Text>
+              <Text style={styles.anonymousText}>Bình luận ẩn danh</Text>
             </TouchableOpacity>
 
             {/* Buttons */}
@@ -447,8 +740,7 @@ export default function MovieDetailScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
-                  setShowReviewModal(false);
-                  setRating(0);
+                  setShowCommentModal(false);
                   setComment('');
                   setIsAnonymous(false);
                 }}
@@ -457,7 +749,7 @@ export default function MovieDetailScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.submitButton]}
-                onPress={handleSubmitReview}
+                onPress={handleSubmitComment}
               >
                 <Text style={styles.buttonText}>Gửi</Text>
               </TouchableOpacity>
@@ -857,5 +1149,107 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Montserrat-Regular',
     fontSize: 14,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  ratingButton: {
+    backgroundColor: '#FFD700',
+  },
+  commentButton: {
+    backgroundColor: '#4A90E2',
+  },
+  actionButtonText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  subsectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    marginBottom: 12,
+    marginTop: 20,
+  },
+  ratingsSection: {
+    marginBottom: 24,
+  },
+  commentsSection: {
+    marginBottom: 24,
+  },
+  ratingModalContent: {
+    backgroundColor: '#000000',
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    borderRadius: 16,
+    padding: 16,
+    width: '90%',
+    maxWidth: 400,
+  },
+  ratingModalTitle: {
+    color: '#FFD700',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  ratingText: {
+    color: '#FFD700',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  ratingAnonymousText: {
+    color: '#FFFFFF',
+  },
+  ratingModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 8,
+  },
+  ratingCancelButton: {
+    flex: 1,
+    backgroundColor: '#333333',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  ratingSendButton: {
+    flex: 1,
+    backgroundColor: '#FFD700',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  ratingRemoveButton: {
+    flex: 1,
+    backgroundColor: '#FF4444',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  ratingButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
 });
