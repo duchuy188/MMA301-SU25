@@ -22,6 +22,7 @@ export default function MovieDetailScreen() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false); // Thêm state cho tùy chọn ẩn danh
   const [reviews, setReviews] = useState<MovieReview[]>([]);
   const [userReview, setUserReview] = useState<MovieReview | null>(null);
   const [user, setUser] = useState<any>(null);
@@ -118,16 +119,36 @@ export default function MovieDetailScreen() {
       return;
     }
 
-    const review: MovieReview = {
-      userId: currentUser._id,
-      movieId: movieId as string,
-      rating,
-      comment: comment.trim(), // Trim the comment to remove whitespace
-      userName: currentUser.name,
-      createdAt: new Date().toISOString()
-    };
-
     try {
+      // Lấy thông tin người dùng từ AsyncStorage
+      const userJson = await AsyncStorage.getItem('auth_user');
+      console.log('User data from AsyncStorage:', userJson);
+      const userData = userJson ? JSON.parse(userJson) : null;
+      console.log('Parsed user data:', userData);
+      
+      if (!userData) {
+        Toast.show({
+          type: 'error',
+          text1: 'Không thể lấy thông tin người dùng',
+          text2: 'Vui lòng đăng nhập lại',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      const review: MovieReview = {
+        userId: currentUser._id,
+        movieId: movieId as string,
+        rating,
+        comment: comment.trim(),
+        userName: isAnonymous ? 'Người dùng ẩn danh' : userData.name,
+        userEmail: isAnonymous ? '' : userData.email,
+        isAnonymous,
+        createdAt: new Date().toISOString()
+      };
+
+      console.log('Review being saved:', review);
+
       const success = await saveMovieReview(review);
       if (success) {
         // Update reviews list
@@ -146,6 +167,9 @@ export default function MovieDetailScreen() {
         }
         
         setShowReviewModal(false);
+        setRating(0);
+        setComment('');
+        setIsAnonymous(false); // Reset trạng thái ẩn danh
         
         Toast.show({
           type: 'success',
@@ -339,9 +363,22 @@ export default function MovieDetailScreen() {
             .map((review, index) => (
             <View key={index} style={styles.reviewItem}>
               <View style={styles.reviewHeader}>
-                <Text style={styles.reviewDate}>
-                  {new Date(review.createdAt).toLocaleDateString('vi-VN')}
-                </Text>
+                <View style={styles.reviewerInfo}>
+                  <View style={styles.userNameContainer}>
+                    <Text style={styles.userIcon}>👤</Text>
+                    <Text style={styles.reviewerName} numberOfLines={1}>
+                      {review.isAnonymous ? 'Người dùng ẩn danh' : review.userName}
+                    </Text>
+                  </View>
+                  {!review.isAnonymous && (
+                    <Text style={styles.reviewerEmail} numberOfLines={1}>
+                      {review.userEmail}
+                    </Text>
+                  )}
+                  <Text style={styles.reviewDate}>
+                    {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                  </Text>
+                </View>
                 <View style={styles.ratingContainer}>
                   <Star size={16} color="#FFD700" fill="#FFD700" />
                   <Text style={styles.ratingText}>{review.rating}/10</Text>
@@ -349,7 +386,7 @@ export default function MovieDetailScreen() {
               </View>
               {review.comment && review.comment.trim() !== '' && (
                 <Text style={styles.reviewComment}>
-                  💬 Bình luận: {review.comment}
+                  💬 {review.comment}
                 </Text>
               )}
             </View>
@@ -394,11 +431,27 @@ export default function MovieDetailScreen() {
               onChangeText={setComment}
             />
 
+            {/* Anonymous Option */}
+            <TouchableOpacity
+              style={styles.anonymousOption}
+              onPress={() => setIsAnonymous(!isAnonymous)}
+            >
+              <View style={[styles.checkbox, isAnonymous && styles.checkboxChecked]}>
+                {isAnonymous && <Text style={styles.checkmark}>✓</Text>}
+              </View>
+              <Text style={styles.anonymousText}>Đánh giá ẩn danh</Text>
+            </TouchableOpacity>
+
             {/* Buttons */}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowReviewModal(false)}
+                onPress={() => {
+                  setShowReviewModal(false);
+                  setRating(0);
+                  setComment('');
+                  setIsAnonymous(false);
+                }}
               >
                 <Text style={styles.buttonText}>Hủy</Text>
               </TouchableOpacity>
@@ -695,9 +748,15 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   reviewerName: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
+    color: '#FFD700',
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    flex: 1, // Cho phép text co giãn
+  },
+  reviewerInfo: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -712,11 +771,13 @@ const styles = StyleSheet.create({
   reviewComment: {
     color: '#fff',
     fontSize: 14,
-    marginBottom: 8,
+    marginTop: 8,
+    fontFamily: 'Montserrat-Regular',
   },
   reviewDate: {
     color: '#888',
     fontSize: 12,
+    fontFamily: 'Montserrat-Regular',
   },
   starsContainer: {
     flexDirection: 'row',
@@ -753,5 +814,48 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#000',
+  },
+  userNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '80%', // Giới hạn chiều rộng để tránh tràn
+  },
+  userIcon: {
+    fontSize: 16,
+  },
+  reviewerEmail: {
+    color: '#888',
+    fontSize: 12,
+    fontFamily: 'Montserrat-Regular',
+    marginBottom: 2,
+  },
+  anonymousOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#FFD700',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#FFD700',
+  },
+  checkmark: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  anonymousText: {
+    color: '#fff',
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
   },
 });

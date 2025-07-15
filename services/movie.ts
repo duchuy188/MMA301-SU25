@@ -39,6 +39,8 @@ export interface MovieReview {
     rating: number;
     comment: string;
     userName: string;
+    userEmail: string; // Thêm trường email
+    isAnonymous: boolean; // Thêm trường để đánh dấu review ẩn danh
     createdAt: string;
 }
 
@@ -99,13 +101,20 @@ const getReviewsStorageKey = (movieId: string) => `movieReviews_${movieId}`;
 // Function to save a review
 export const saveMovieReview = async (review: MovieReview) => {
     try {
+        // Get user data from AsyncStorage to ensure we have the latest name
+        const userJson = await AsyncStorage.getItem('auth_user');
+        const userData = userJson ? JSON.parse(userJson) : null;
+        
         // Get existing reviews for this movie
         const storageKey = getReviewsStorageKey(review.movieId);
         const existingReviewsStr = await AsyncStorage.getItem(storageKey);
         let reviews: MovieReview[] = existingReviewsStr ? JSON.parse(existingReviewsStr) : [];
         
-        // Add new review (allow multiple reviews from same user)
-        reviews.push(review);
+        // Add new review with the latest user name
+        reviews.push({
+            ...review,
+            userName: userData?.name || review.userName // Use latest name from AsyncStorage if available
+        });
         
         // Save back to AsyncStorage
         await AsyncStorage.setItem(storageKey, JSON.stringify(reviews));
