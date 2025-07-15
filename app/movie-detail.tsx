@@ -279,6 +279,12 @@ export default function MovieDetailScreen() {
           text1: 'Bình luận thành công',
           visibilityTime: 3000,
         });
+        // Cập nhật lại AsyncStorage cho rating
+        if (review.rating === 0) {
+          await AsyncStorage.removeItem(`movie_rating_${movieId}`);
+        } else {
+          await AsyncStorage.setItem(`movie_rating_${movieId}`, review.rating.toString());
+        }
       }
     } catch (error) {
       Toast.show({
@@ -294,26 +300,15 @@ export default function MovieDetailScreen() {
     const currentUser = getCurrentUser();
     if (!currentUser) return;
 
-    // Get the latest rating from AsyncStorage
+    // Chỉ lấy rating từ AsyncStorage (luôn là rating mới nhất)
     AsyncStorage.getItem(`movie_rating_${movieId}`).then(savedRating => {
       if (savedRating) {
         const currentRating = parseInt(savedRating);
         setTempRating(currentRating);
         setRating(currentRating);
       } else {
-        // If no rating in AsyncStorage, check reviews for the latest rating
-        const userRating = reviews.find(review => 
-          review.userId === currentUser._id && 
-          review.rating > 0 &&
-          (!review.comment || review.comment.trim() === '')
-        );
-        if (userRating) {
-          setTempRating(userRating.rating);
-          setRating(userRating.rating);
-        } else {
-          setTempRating(0);
-          setRating(0);
-        }
+        setTempRating(0);
+        setRating(0);
       }
       setIsEditingRating(true);
       setShowRatingModal(true);
@@ -442,10 +437,13 @@ export default function MovieDetailScreen() {
           });
         }
         
-        // Reset rating states but keep modal open
+        // Reset rating states
         setRating(0);
         setTempRating(0);
         setUserReview(null);
+        
+        // Close the rating modal after removing
+        setShowRatingModal(false);
         
         Toast.show({
           type: 'success',
@@ -463,9 +461,36 @@ export default function MovieDetailScreen() {
     }
   };
 
-  const handleCommentButtonClick = () => {
+  // Thêm hàm mới để lấy rating hiện tại
+  const getCurrentRating = async () => {
+    try {
+      const savedRating = await AsyncStorage.getItem(`movie_rating_${movieId}`);
+      if (savedRating) {
+        return parseInt(savedRating);
+      }
+      // Nếu không có rating trong AsyncStorage, kiểm tra trong reviews
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        const userRating = reviews.find(review => 
+          review.userId === currentUser._id && 
+          review.rating > 0
+        );
+        return userRating ? userRating.rating : 0;
+      }
+      return 0;
+    } catch (error) {
+      console.error('Error getting current rating:', error);
+      return 0;
+    }
+  };
+
+  // Sửa lại hàm handleCommentButtonClick để lấy rating hiện tại
+  const handleCommentButtonClick = async () => {
     setComment('');
     setIsAnonymous(false);
+    const currentRating = await getCurrentRating();
+    setRating(currentRating);
+    setTempRating(currentRating);
     setShowCommentModal(true);
   };
 
