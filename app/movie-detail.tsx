@@ -296,17 +296,37 @@ export default function MovieDetailScreen() {
 
   const handleRatingButtonClick = () => {
     const currentUser = getCurrentUser();
-    const userRating = reviews.find(review => review.userId === currentUser?._id && review.rating > 0);
-    
-    if (userRating) {
-      setTempRating(userRating.rating);
+    if (!currentUser) return;
+
+    // Get the latest rating from AsyncStorage
+    AsyncStorage.getItem(`movie_rating_${movieId}`).then(savedRating => {
+      if (savedRating) {
+        const currentRating = parseInt(savedRating);
+        setTempRating(currentRating);
+        setRating(currentRating);
+      } else {
+        // If no rating in AsyncStorage, check reviews for the latest rating
+        const userRating = reviews.find(review => 
+          review.userId === currentUser._id && 
+          review.rating > 0 &&
+          (!review.comment || review.comment.trim() === '')
+        );
+        if (userRating) {
+          setTempRating(userRating.rating);
+          setRating(userRating.rating);
+        } else {
+          setTempRating(0);
+          setRating(0);
+        }
+      }
       setIsEditingRating(true);
-    } else {
-      setTempRating(0);
-      setIsEditingRating(false);
-    }
-    
-    setShowRatingModal(true);
+      setShowRatingModal(true);
+    });
+  };
+
+  // Function to handle star selection
+  const handleStarSelect = (selectedRating: number) => {
+    setTempRating(selectedRating);
   };
 
   const handleUpdateRating = async () => {
@@ -389,6 +409,9 @@ export default function MovieDetailScreen() {
     if (!currentUser || !movieId) return;
 
     try {
+      // Remove rating from AsyncStorage first
+      await AsyncStorage.removeItem(`movie_rating_${movieId}`);
+      
       // Create a review with 0 rating to remove the rating
       const ratingReview: MovieReview = {
         userId: currentUser._id,
@@ -406,20 +429,27 @@ export default function MovieDetailScreen() {
         // Get all reviews to update the average rating
         const allReviews = await getMovieReviews(movieId as string);
         
+        // Filter out the current user's ratings that don't have comments
+        const filteredReviews = allReviews.filter(review => 
+          review.userId !== currentUser._id || (review.comment && review.comment.trim() !== '')
+        );
+        
+        setReviews(filteredReviews);
+        
         // Update movie rating without the removed rating
         if (movie) {
-          const avgRating = calculateAverageRating(allReviews.filter(r => r.rating > 0));
+          const avgRating = calculateAverageRating(filteredReviews.filter(r => r.rating > 0));
           setMovie({
             ...movie,
             rating: avgRating,
-            votes: allReviews.filter(r => r.rating > 0).length
+            votes: filteredReviews.filter(r => r.rating > 0).length
           });
         }
         
-        // Remove rating from AsyncStorage
-        await AsyncStorage.removeItem(`movie_rating_${movieId}`);
+        // Reset all rating states
         setRating(0);
         setTempRating(0);
+        setUserReview(null);
         setShowRatingModal(false);
         
         Toast.show({
@@ -673,7 +703,7 @@ export default function MovieDetailScreen() {
               {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
                 <TouchableOpacity
                   key={star}
-                  onPress={() => setTempRating(star)}
+                  onPress={() => handleStarSelect(star)}
                 >
                   <Star
                     size={24}
@@ -1203,22 +1233,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 20,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 16,
-  },
-  ratingText: {
-    color: '#FFD700',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  ratingAnonymousText: {
-    color: '#FFFFFF',
   },
   ratingModalButtons: {
     flexDirection: 'row',
