@@ -446,11 +446,10 @@ export default function MovieDetailScreen() {
           });
         }
         
-        // Reset all rating states
+        // Reset rating states but keep modal open
         setRating(0);
         setTempRating(0);
         setUserReview(null);
-        setShowRatingModal(false);
         
         Toast.show({
           type: 'success',
@@ -691,12 +690,29 @@ export default function MovieDetailScreen() {
         visible={showRatingModal}
         transparent={true}
         animationType="slide"
+        onRequestClose={() => setShowRatingModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={[styles.modalContent, styles.ratingModalContent]}>
-            <Text style={[styles.modalTitle, styles.ratingModalTitle]}>
-              Chỉnh sửa đánh giá
-            </Text>
+        <TouchableOpacity 
+          style={styles.modalContainer} 
+          activeOpacity={1} 
+          onPress={() => setShowRatingModal(false)}
+        >
+          <TouchableOpacity 
+            style={[styles.modalContent, styles.ratingModalContent]}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, styles.ratingModalTitle]}>
+                Chỉnh sửa đánh giá
+              </Text>
+              <TouchableOpacity 
+                onPress={() => setShowRatingModal(false)}
+                style={styles.closeButton}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
+            </View>
             
             {/* Rating Stars */}
             <View style={styles.starsContainer}>
@@ -735,8 +751,8 @@ export default function MovieDetailScreen() {
                 <Text style={styles.ratingButtonText}>Cập nhật</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Comment Modal */}
@@ -1229,7 +1245,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFD700',
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     width: '90%',
     maxWidth: 400,
   },
@@ -1263,5 +1279,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  closeButtonText: {
+    color: '#FFD700',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
 });
