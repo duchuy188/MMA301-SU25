@@ -73,10 +73,8 @@ export const login = async (email: string, password: string, rememberMe: boolean
       currentUser = response.data.user;
       api.defaults.headers.common['Authorization'] = `Bearer ${currentToken}`;
       
-      // Chỉ lưu token vào AsyncStorage nếu rememberMe được bật
-      if (rememberMe) {
-        await saveAuthTokens(currentToken, currentUser);
-      }
+      // Always save user data to AsyncStorage
+      await saveAuthTokens(currentToken, currentUser);
     }
     
     return response.data;
@@ -110,6 +108,8 @@ export const logout = async () => {
     // Xóa token khỏi AsyncStorage
     await AsyncStorage.removeItem('auth_token');
     await AsyncStorage.removeItem('auth_user');
+    // Xóa reviews khi đăng xuất
+    await AsyncStorage.removeItem('movieReviews');
   } catch (error) {
     console.error('Lỗi khi đăng xuất:', error);
   }

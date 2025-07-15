@@ -404,7 +404,7 @@ export default function TheaterDetailScreen() {
                         </Text>
                         <View style={styles.ratingContainer}>
                           <Star size={12} color="#FFD700" />
-                          <Text style={styles.ratingText}>{item.movie.rating || 7.2}</Text>
+                          <Text style={styles.ratingText}>{item.movie.rating || '7.5'}</Text>
                         </View>
                       </View>
                       
