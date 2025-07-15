@@ -116,7 +116,7 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         setUserReview(review);
         
         const avgRating = calculateAverageRating(updatedReviews);
-        onRatingUpdate(avgRating, updatedReviews.length);
+        onRatingUpdate(avgRating, updatedReviews.filter(r => r.rating > 0).length);
         
         setShowRatingModal(false);
         setRating(tempRating);
@@ -127,6 +127,9 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
           text1: isEditingRating ? 'Cập nhật đánh giá thành công' : 'Đánh giá thành công',
           visibilityTime: 3000,
         });
+
+        // Save rating to AsyncStorage for persistence
+        await AsyncStorage.setItem(`movie_rating_${movieId}`, tempRating.toString());
       }
     } catch (error) {
       Toast.show({
@@ -310,7 +313,7 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     try {
       await AsyncStorage.removeItem(`movie_rating_${movieId}`);
       
-      const ratingReview: MovieReview = {
+      const review: MovieReview = {
         userId: currentUser._id,
         movieId: movieId,
         rating: 0,
@@ -321,22 +324,18 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         createdAt: new Date().toISOString()
       };
 
-      const success = await saveMovieReview(ratingReview);
+      const success = await saveMovieReview(review);
       if (success) {
-        const allReviews = await getMovieReviews(movieId);
-        const filteredReviews = allReviews.filter(review => 
-          review.userId !== currentUser._id || (review.comment && review.comment.trim() !== '')
-        );
-        
-        setReviews(filteredReviews);
-        const avgRating = calculateAverageRating(filteredReviews.filter(r => r.rating > 0));
-        onRatingUpdate(avgRating, filteredReviews.filter(r => r.rating > 0).length);
-        
+        const updatedReviews = await getMovieReviews(movieId);
+        setReviews(updatedReviews);
+        setUserReview(null);
         setRating(0);
         setTempRating(0);
-        setUserReview(null);
         setShowRatingModal(false);
         
+        const avgRating = calculateAverageRating(updatedReviews);
+        onRatingUpdate(avgRating, updatedReviews.filter(r => r.rating > 0).length);
+
         Toast.show({
           type: 'success',
           text1: 'Đã xóa đánh giá',

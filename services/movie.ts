@@ -110,11 +110,16 @@ export const saveMovieReview = async (review: MovieReview) => {
         const existingReviewsStr = await AsyncStorage.getItem(storageKey);
         let reviews: MovieReview[] = existingReviewsStr ? JSON.parse(existingReviewsStr) : [];
         
-        // Add new review with the latest user name
-        reviews.push({
-            ...review,
-            userName: userData?.name || review.userName // Use latest name from AsyncStorage if available
-        });
+        // Remove existing review from this user if exists
+        reviews = reviews.filter(r => r.userId !== review.userId);
+        
+        // Only add the review if it has a rating > 0
+        if (review.rating > 0) {
+            reviews.push({
+                ...review,
+                userName: userData?.name || review.userName
+            });
+        }
         
         // Save back to AsyncStorage
         await AsyncStorage.setItem(storageKey, JSON.stringify(reviews));
@@ -127,7 +132,7 @@ export const saveMovieReview = async (review: MovieReview) => {
                 cachedMovies[movieIndex] = {
                     ...cachedMovies[movieIndex],
                     rating: avgRating,
-                    votes: reviews.length
+                    votes: reviews.length // Now this only includes reviews with rating > 0
                 };
             }
         }
@@ -177,7 +182,7 @@ export const getUserReview = async (userId: string, movieId: string): Promise<Mo
 // Function to calculate average rating
 export const calculateAverageRating = (reviews: MovieReview[]): number => {
     const validReviews = reviews.filter(review => review.rating > 0);
-    if (validReviews.length === 0) return 7.5;
+    if (validReviews.length === 0) return 0;
     const sum = validReviews.reduce((acc, review) => acc + review.rating, 0);
     return Number((sum / validReviews.length).toFixed(1));
 };
