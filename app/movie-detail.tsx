@@ -258,19 +258,15 @@ export default function MovieDetailScreen() {
         movieId: movieId as string,
         rating: currentRating,
         comment: comment.trim(),
-        userName: userData.name,
+        userName: isAnonymous ? 'Ẩn danh' : userData.name,
         userEmail: userData.email,
-        isAnonymous: false,
+        isAnonymous: isAnonymous,
         createdAt: new Date().toISOString()
       };
 
       const success = await saveMovieReview(review);
       if (success) {
-        // After successful comment submission, remove the rating from AsyncStorage
-        await AsyncStorage.removeItem(`movie_rating_${movieId}`);
-        setRating(0);
-        setTempRating(0);
-        
+        // Không xóa rating và không reset rating về 0 nữa
         const updatedReviews = await getMovieReviews(movieId as string);
         setReviews(updatedReviews);
         setUserReview(review);
@@ -663,7 +659,7 @@ export default function MovieDetailScreen() {
                         </Text>
                       </View>
                       <Text style={styles.reviewerEmail} numberOfLines={1}>
-                        {review.userEmail}
+                        {review.isAnonymous ? '' : review.userEmail}
                       </Text>
                       <Text style={styles.reviewDate}>
                         {new Date(review.createdAt).toLocaleDateString('vi-VN')}
