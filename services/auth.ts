@@ -110,6 +110,8 @@ export const logout = async () => {
     // Xóa token khỏi AsyncStorage
     await AsyncStorage.removeItem('auth_token');
     await AsyncStorage.removeItem('auth_user');
+    // Xóa reviews khi đăng xuất
+    await AsyncStorage.removeItem('movieReviews');
   } catch (error) {
     console.error('Lỗi khi đăng xuất:', error);
   }

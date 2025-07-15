@@ -1,8 +1,11 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Linking, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Linking, Modal, TextInput } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Star, Clock, Calendar, Play } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
-import { Movie, getMovieById } from '../services/movie';
+import { Movie, getMovieById, MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating } from '../services/movie';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCurrentUser } from '../services/auth';
+import Toast from 'react-native-toast-message';
 import * as WebBrowser from 'expo-web-browser';
 import YoutubePlayer from 'react-native-youtube-iframe';
 
@@ -14,24 +17,56 @@ export default function MovieDetailScreen() {
   const [showTrailer, setShowTrailer] = useState(false);
   const [trailerModalVisible, setTrailerModalVisible] = useState(false);
   const [playing, setPlaying] = useState(false);
+  
+  // Review states
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [reviews, setReviews] = useState<MovieReview[]>([]);
+  const [userReview, setUserReview] = useState<MovieReview | null>(null);
+  const [user, setUser] = useState<any>(null);
 
+  // Load movie details and reviews
   useEffect(() => {
-    const fetchMovieDetails = async () => {
+    const loadMovieAndReviews = async () => {
       if (!movieId) return;
       
       try {
         setLoading(true);
-        const data = await getMovieById(movieId as string);
-        setMovie(data);
+        
+        // Load movie details
+        const movieData = await getMovieById(movieId as string);
+        
+        // Load all reviews for this movie
+        const movieReviews = await getMovieReviews(movieId as string);
+        setReviews(movieReviews);
+        
+        // Calculate average rating
+        if (movieReviews.length > 0) {
+          const avgRating = calculateAverageRating(movieReviews);
+          movieData.rating = avgRating;
+          movieData.votes = movieReviews.length;
+        }
+        
+        setMovie(movieData);
+        
+        // Load current user's review if exists
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          const userReviewData = await getUserReview(currentUser._id, movieId as string);
+          if (userReviewData) {
+            setUserReview(userReviewData);
+          }
+        }
       } catch (err) {
         setError('Không thể tải thông tin phim. Vui lòng thử lại sau.');
-        console.error('Error fetching movie details:', err);
+        console.error('Error loading movie and reviews:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMovieDetails();
+    loadMovieAndReviews();
   }, [movieId]);
 
   const handleBookTicket = () => {
@@ -61,6 +96,78 @@ export default function MovieDetailScreen() {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
     return match && match[2].length === 11 ? match[2] : null;
+  };
+
+  const handleSubmitReview = async () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !movieId) {
+      Toast.show({
+        type: 'error',
+        text1: 'Bạn cần đăng nhập để đánh giá',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    if (rating === 0) {
+      Toast.show({
+        type: 'error',
+        text1: 'Vui lòng chọn số sao',
+        visibilityTime: 3000,
+      });
+      return;
+    }
+
+    const review: MovieReview = {
+      userId: currentUser._id,
+      movieId: movieId as string,
+      rating,
+      comment: comment.trim(), // Trim the comment to remove whitespace
+      userName: currentUser.name,
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      const success = await saveMovieReview(review);
+      if (success) {
+        // Update reviews list
+        const updatedReviews = await getMovieReviews(movieId as string);
+        setReviews(updatedReviews);
+        setUserReview(review);
+        
+        // Update movie's rating
+        if (movie) {
+          const avgRating = calculateAverageRating(updatedReviews);
+          setMovie({
+            ...movie,
+            rating: avgRating,
+            votes: updatedReviews.length
+          });
+        }
+        
+        setShowReviewModal(false);
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Đánh giá thành công',
+          visibilityTime: 3000,
+        });
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể lưu đánh giá',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const handleReviewButtonClick = () => {
+    // Reset rating and comment when opening modal
+    setRating(0);
+    setComment('');
+    setShowReviewModal(true);
   };
 
   if (loading) {
@@ -123,7 +230,7 @@ export default function MovieDetailScreen() {
         <View style={styles.movieMeta}>
           <View style={styles.metaItem}>
             <Star size={16} color="#FFD700" />
-            <Text style={styles.rating}>{movie.rating || '7.5'}</Text>
+            <Text style={styles.rating}>{movie.rating ? movie.rating.toFixed(1) : '0.0'}</Text>
           </View>
           <View style={styles.metaItem}>
             <Clock size={16} color="#666" />
@@ -202,6 +309,109 @@ export default function MovieDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Review Section */}
+      <View style={styles.reviewSection}>
+        <Text style={styles.sectionTitle}>Đánh giá phim</Text>
+        
+        {getCurrentUser() ? (
+          <TouchableOpacity
+            style={styles.reviewButton}
+            onPress={handleReviewButtonClick}
+          >
+            <Text style={styles.reviewButtonText}>
+              {userReview ? 'Đánh giá' : 'Viết đánh giá'}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.reviewButton}
+            onPress={() => router.push('/auth')}
+          >
+            <Text style={styles.reviewButtonText}>Đăng nhập để đánh giá</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Reviews List */}
+        <View style={styles.reviewsList}>
+          {reviews
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .map((review, index) => (
+            <View key={index} style={styles.reviewItem}>
+              <View style={styles.reviewHeader}>
+                <Text style={styles.reviewDate}>
+                  {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                </Text>
+                <View style={styles.ratingContainer}>
+                  <Star size={16} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingText}>{review.rating}/10</Text>
+                </View>
+              </View>
+              {review.comment && review.comment.trim() !== '' && (
+                <Text style={styles.reviewComment}>
+                  💬 Bình luận: {review.comment}
+                </Text>
+              )}
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* Review Modal */}
+      <Modal
+        visible={showReviewModal}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Đánh giá phim</Text>
+            
+            {/* Rating Stars */}
+            <View style={styles.starsContainer}>
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setRating(star)}
+                >
+                  <Star
+                    size={30}
+                    color="#FFD700"
+                    fill={star <= rating ? "#FFD700" : "none"}
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.ratingText}>{rating}/10</Text>
+
+            {/* Comment Input */}
+            <TextInput
+              style={styles.commentInput}
+              placeholder="Viết đánh giá của bạn..."
+              multiline
+              numberOfLines={4}
+              value={comment}
+              onChangeText={setComment}
+            />
+
+            {/* Buttons */}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowReviewModal(false)}
+              >
+                <Text style={styles.buttonText}>Hủy</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleSubmitReview}
+              >
+                <Text style={styles.buttonText}>Gửi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.bookButton} onPress={handleBookTicket}>
@@ -445,5 +655,103 @@ const styles = StyleSheet.create({
     fontFamily: 'PlayfairDisplay-Bold',
     fontSize: 16,
     color: '#FFD700',
+  },
+  reviewSection: {
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+    marginTop: 16,
+    borderRadius: 8,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    marginBottom: 16,
+  },
+  reviewButton: {
+    backgroundColor: '#FFD700',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reviewButtonText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  reviewsList: {
+    gap: 16,
+  },
+  reviewItem: {
+    backgroundColor: '#2a2a2a',
+    padding: 16,
+    borderRadius: 8,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  reviewerName: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  ratingText: {
+    color: '#FFD700',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  reviewComment: {
+    color: '#fff',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  reviewDate: {
+    color: '#888',
+    fontSize: 12,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  commentInput: {
+    backgroundColor: '#2a2a2a',
+    color: '#fff',
+    width: '100%',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 16,
+    marginBottom: 20,
+    textAlignVertical: 'top',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  modalButton: {
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#444',
+  },
+  submitButton: {
+    backgroundColor: '#FFD700',
+  },
+  buttonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
   },
 });

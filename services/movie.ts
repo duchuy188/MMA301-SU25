@@ -1,4 +1,6 @@
 import api from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getCurrentUser } from './auth';
 
 export interface Movie {
     // Required fields
@@ -29,6 +31,15 @@ export interface Movie {
     isActive?: boolean;
     __v?: number;
     endDate?: string | null;
+}
+
+export interface MovieReview {
+    userId: string;
+    movieId: string;
+    rating: number;
+    comment: string;
+    userName: string;
+    createdAt: string;
 }
 
 let cachedMovies: Movie[] | null = null;
@@ -80,4 +91,83 @@ export const getMoviesByStatus = async (status: 'now-showing' | 'coming-soon' | 
         console.error(`Error fetching movies with status ${status}:`, error);
         return [];
     }
+};
+
+// Function to get storage key for reviews
+const getReviewsStorageKey = (movieId: string) => `movieReviews_${movieId}`;
+
+// Function to save a review
+export const saveMovieReview = async (review: MovieReview) => {
+    try {
+        // Get existing reviews for this movie
+        const storageKey = getReviewsStorageKey(review.movieId);
+        const existingReviewsStr = await AsyncStorage.getItem(storageKey);
+        let reviews: MovieReview[] = existingReviewsStr ? JSON.parse(existingReviewsStr) : [];
+        
+        // Add new review (allow multiple reviews from same user)
+        reviews.push(review);
+        
+        // Save back to AsyncStorage
+        await AsyncStorage.setItem(storageKey, JSON.stringify(reviews));
+
+        // Update movie rating in cache if exists
+        if (cachedMovies) {
+            const movieIndex = cachedMovies.findIndex(m => m._id === review.movieId);
+            if (movieIndex !== -1) {
+                const avgRating = calculateAverageRating(reviews);
+                cachedMovies[movieIndex] = {
+                    ...cachedMovies[movieIndex],
+                    rating: avgRating,
+                    votes: reviews.length
+                };
+            }
+        }
+
+        return true;
+    } catch (error) {
+        console.error('Error saving movie review:', error);
+        return false;
+    }
+};
+
+// Function to get reviews for a movie
+export const getMovieReviews = async (movieId: string): Promise<MovieReview[]> => {
+    try {
+        const storageKey = getReviewsStorageKey(movieId);
+        const reviewsStr = await AsyncStorage.getItem(storageKey);
+        if (!reviewsStr) return [];
+        
+        return JSON.parse(reviewsStr);
+    } catch (error) {
+        console.error('Error getting movie reviews:', error);
+        return [];
+    }
+};
+
+// Function to get user's latest review for a movie
+export const getUserReview = async (userId: string, movieId: string): Promise<MovieReview | null> => {
+    try {
+        const storageKey = getReviewsStorageKey(movieId);
+        const reviewsStr = await AsyncStorage.getItem(storageKey);
+        if (!reviewsStr) return null;
+        
+        const reviews: MovieReview[] = JSON.parse(reviewsStr);
+        // Get all reviews from this user for this movie, sorted by date
+        const userReviews = reviews
+            .filter(review => review.userId === userId)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        // Return the most recent review
+        return userReviews[0] || null;
+    } catch (error) {
+        console.error('Error getting user review:', error);
+        return null;
+    }
+};
+
+// Function to calculate average rating
+export const calculateAverageRating = (reviews: MovieReview[]): number => {
+    if (reviews.length === 0) return 0;
+    const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
+    return Number((sum / reviews.length).toFixed(1));
 };
