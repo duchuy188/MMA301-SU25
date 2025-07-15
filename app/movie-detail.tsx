@@ -717,14 +717,19 @@ export default function MovieDetailScreen() {
 
             {/* Buttons */}
             <View style={styles.ratingModalButtons}>
+              {rating > 0 && (
+                <TouchableOpacity
+                  style={styles.ratingRemoveButton}
+                  onPress={handleRemoveRating}
+                >
+                  <Text style={styles.ratingButtonText}>Xóa đánh giá</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
-                style={styles.ratingRemoveButton}
-                onPress={handleRemoveRating}
-              >
-                <Text style={styles.ratingButtonText}>Xóa đánh giá</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.ratingSendButton}
+                style={[
+                  styles.ratingSendButton,
+                  !rating && { flex: 1 } // Make update button take full width if no remove button
+                ]}
                 onPress={handleUpdateRating}
               >
                 <Text style={styles.ratingButtonText}>Cập nhật</Text>
@@ -1240,9 +1245,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
     gap: 8,
   },
-  ratingCancelButton: {
+  ratingRemoveButton: {
     flex: 1,
-    backgroundColor: '#333333',
+    backgroundColor: '#FF4444',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
@@ -1250,13 +1255,6 @@ const styles = StyleSheet.create({
   ratingSendButton: {
     flex: 1,
     backgroundColor: '#FFD700',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  ratingRemoveButton: {
-    flex: 1,
-    backgroundColor: '#FF4444',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
