@@ -176,7 +176,8 @@ export const getUserReview = async (userId: string, movieId: string): Promise<Mo
 
 // Function to calculate average rating
 export const calculateAverageRating = (reviews: MovieReview[]): number => {
-    if (reviews.length === 0) return 0;
-    const sum = reviews.reduce((acc, review) => acc + review.rating, 0);
-    return Number((sum / reviews.length).toFixed(1));
+    const validReviews = reviews.filter(review => review.rating > 0);
+    if (validReviews.length === 0) return 7.5;
+    const sum = validReviews.reduce((acc, review) => acc + review.rating, 0);
+    return Number((sum / validReviews.length).toFixed(1));
 };

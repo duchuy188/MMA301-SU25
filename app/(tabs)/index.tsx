@@ -522,8 +522,8 @@ export default function HomeScreen() {
                   {movie.genre}
                 </Text>
                 <View style={styles.movieMetaSmall}>
-                  <Star size={12} color="#FFD700" />
-                  <Text style={styles.ratingSmall}>{movie.rating || '7.5'}</Text>
+                  <Star size={12} color="#FFD700" fill="#FFD700" />
+                  <Text style={styles.ratingSmall}>{movie.rating ? movie.rating.toFixed(1) : '7.5'}/10</Text>
                 </View>
               </View>
             </TouchableOpacity>
