@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ArrowLeft, Download, Share2, Calendar, Clock, MapPin, Star } from 'lucide-react-native';
+import { Download, Share2, Calendar, Clock, MapPin, Star } from 'lucide-react-native';
 import { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ViewShot from 'react-native-view-shot';
@@ -202,9 +202,7 @@ export default function ETicketScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <ArrowLeft size={24} color="#FFD700" />
-        </TouchableOpacity>
+        {/* Đã xóa nút quay về */}
         <Text style={styles.headerTitle}>Vé điện tử</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.actionButton} onPress={captureAndDownload}>
