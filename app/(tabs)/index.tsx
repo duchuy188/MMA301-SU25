@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Dimensions, FlatList } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, ActivityIndicator, Dimensions, FlatList, Modal } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { Star, Crown, Clock, Search, Filter, MapPin, Ticket } from 'lucide-react-native';
+import { Star, Crown, Clock, Search, Filter, MapPin, Ticket, Film, Tag } from 'lucide-react-native';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Movie, getPublicMovies } from '../../services/movie';
 import { getTheaters, Theater } from '../../services/theater';
@@ -8,7 +8,7 @@ import { getAllPromotions, Promotion } from '../../services/promotion';
 import Carousel from 'react-native-reanimated-carousel';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
+import React from 'react';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -31,6 +31,15 @@ const extractGenres = (movies: Movie[]) => {
   });
   return Array.from(genreSet);
 };
+
+// Thêm danh sách thể loại chuẩn hóa
+const standardGenres = [
+  "Phim Cao Bồi", "Phim Chiến Tranh", "Phim Gia Đình", "Phim Giả Tưởng", 
+  "Phim Giật Gân", "Phim Hài", "Phim Hành Động", "Phim Hình Sự", 
+  "Phim Hoạt Hình", "Phim Kinh Dị", "Phim Lãng Mạn", "Phim Lịch Sử",
+  "Phim Bí Ẩn", "Phim Âm Nhạc", "Phim Phiêu Lưu", "Phim Tài Liệu", 
+  "Phim Chính Kịch", "Phim Thần Thoại", "Phim Thể Thao", "Phim Tiểu Sử"
+];
 
 
 let cachedMovies: Movie[] = [];
@@ -87,6 +96,7 @@ export default function HomeScreen() {
   const [banners, setBanners] = useState<BannerItem[]>([]);
   const [loadingBanners, setLoadingBanners] = useState(true);
   const flatListRef = useRef<FlatList>(null);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
 
   // Fetch movies when the screen comes into focus
   useFocusEffect(
@@ -495,7 +505,16 @@ export default function HomeScreen() {
     if (selectedGenres.length > 0) {
       filteredMovies = filteredMovies.filter(movie => {
         const movieGenres = movie.genre.split(', ');
-        return selectedGenres.some(genre => movieGenres.includes(genre));
+        // Kiểm tra xem thể loại của phim có khớp với bất kỳ thể loại đã chọn nào không
+        return selectedGenres.some(selectedGenre => {
+          // Loại bỏ tiền tố "Phim " để so sánh
+          const shortSelectedGenre = selectedGenre.replace("Phim ", "");
+          return movieGenres.some(movieGenre => 
+            movieGenre === shortSelectedGenre || 
+            movieGenre.includes(shortSelectedGenre) ||
+            shortSelectedGenre.includes(movieGenre)
+          );
+        });
       });
     }
     
@@ -648,7 +667,9 @@ export default function HomeScreen() {
                   <View style={styles.bannerOverlay}>
                     <View style={styles.bannerContent}>
                       <Text style={styles.bannerTitle}>{item.title}</Text>
-                      <Text style={styles.bannerDescription}>{item.description}</Text>
+                      <Text style={styles.bannerDescription} numberOfLines={2}>
+                        {item.description}
+                      </Text>
                     </View>
                     <View style={styles.bannerTypeContainer}>
                       {item.type === 'movie' && (
@@ -691,6 +712,61 @@ export default function HomeScreen() {
     );
   };
 
+  const renderFilterModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={filterModalVisible}
+      onRequestClose={() => setFilterModalVisible(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={styles.titleContainer}>
+              <Film size={20} color="#FFD700" />
+              <Text style={styles.modalTitle}>Thể loại</Text>
+            </View>
+            <TouchableOpacity onPress={() => setFilterModalVisible(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.genreGrid}>
+            {standardGenres.map((genre) => (
+              <TouchableOpacity
+                key={genre}
+                style={[
+                  styles.genreButton,
+                  selectedGenres.includes(genre) && styles.selectedGenreButton
+                ]}
+                onPress={() => toggleGenre(genre)}
+              >
+                <Text
+                  style={[
+                    styles.genreButtonText,
+                    selectedGenres.includes(genre) && styles.selectedGenreButtonText
+                  ]}
+                >
+                  {genre.replace('Phim ', '')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          <View style={styles.modalFooter}>
+            <TouchableOpacity 
+              style={styles.applyButton} 
+              onPress={() => setFilterModalVisible(false)}
+            >
+              <Tag size={16} color="#000000" />
+              <Text style={styles.applyButtonText}>Lọc kết quả</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -711,8 +787,8 @@ export default function HomeScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
         />
-        <TouchableOpacity onPress={() => setShowFilters(!showFilters)}>
-          <Filter size={20} color={showFilters || selectedGenres.length > 0 ? "#FFD700" : "#666"} />
+        <TouchableOpacity onPress={() => setFilterModalVisible(true)}>
+          <Filter size={20} color={selectedGenres.length > 0 ? "#FFD700" : "#666"} />
         </TouchableOpacity>
       </View>
 
@@ -727,20 +803,20 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           </View>
-          <View style={styles.genreContainer}>
-            {allGenres.map((genre) => (
+          <View style={styles.genreGrid}>
+            {standardGenres.map((genre) => (
               <TouchableOpacity
                 key={genre}
                 style={[
-                  styles.genreTag,
-                  selectedGenres.includes(genre) && styles.selectedGenreTag
+                  styles.genreButton,
+                  selectedGenres.includes(genre) && styles.selectedGenreButton
                 ]}
                 onPress={() => toggleGenre(genre)}
               >
                 <Text
                   style={[
-                    styles.genreText,
-                    selectedGenres.includes(genre) && styles.selectedGenreText
+                    styles.genreButtonText,
+                    selectedGenres.includes(genre) && styles.selectedGenreButtonText
                   ]}
                 >
                   {genre}
@@ -779,6 +855,9 @@ export default function HomeScreen() {
           renderMovieGrid(comingSoonMovies, true)
         )}
       </View>
+
+      {/* Thêm modal filter */}
+      {renderFilterModal()}
     </ScrollView>
   );
 }
@@ -831,26 +910,24 @@ const styles = StyleSheet.create({
   filtersContainer: {
     marginHorizontal: 20,
     marginBottom: 15,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#333',
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 15,
   },
   filterHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 15,
   },
   filterTitle: {
     fontFamily: 'Montserrat-SemiBold',
-    fontSize: 14,
+    fontSize: 16,
     color: '#FFFFFF',
   },
   clearFilters: {
     fontFamily: 'Montserrat-Medium',
-    fontSize: 12,
+    fontSize: 14,
     color: '#FFD700',
   },
   genreContainer: {
@@ -859,23 +936,33 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   genreTag: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#333',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#222',
     borderWidth: 1,
     borderColor: '#444',
+    marginRight: 8,
+    marginBottom: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
   },
   selectedGenreTag: {
     backgroundColor: '#FFD700',
+    borderColor: '#FFD700',
   },
   genreText: {
     fontFamily: 'Montserrat-Medium',
-    fontSize: 12,
+    fontSize: 13,
     color: '#FFFFFF',
+    textAlign: 'center',
   },
   selectedGenreText: {
     color: '#000000',
+    fontFamily: 'Montserrat-SemiBold',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -1051,13 +1138,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.7)', // Tăng độ đậm của nền
     padding: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     borderBottomLeftRadius: 10,
     borderBottomRightRadius: 10,
+    maxHeight: '40%', // Giới hạn chiều cao tối đa
   },
   bannerContent: {
     flex: 1,
@@ -1068,11 +1156,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFFFFF',
     marginBottom: 4,
+    maxWidth: '90%', // Giới hạn chiều rộng
   },
   bannerDescription: {
     fontFamily: 'Montserrat-Regular',
     fontSize: 12,
     color: '#CCCCCC',
+    maxWidth: '90%', // Giới hạn chiều rộng
   },
   bannerTypeContainer: {
     alignItems: 'flex-end',
@@ -1144,5 +1234,98 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#FFFFFF',
     textTransform: 'uppercase',
+  },
+  genreGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  genreButton: {
+    width: '48%',
+    backgroundColor: '#222',
+    borderRadius: 25,
+    paddingVertical: 12,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  selectedGenreButton: {
+    backgroundColor: '#FFD700',
+  },
+  genreButtonText: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  selectedGenreButtonText: {
+    color: '#000000',
+    fontFamily: 'Montserrat-SemiBold',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    width: '90%',
+    backgroundColor: '#111',
+    borderRadius: 20,
+    padding: 16,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontFamily: 'PlayfairDisplay-Bold',
+    fontSize: 20,
+    color: '#FFD700',
+  },
+  closeButton: {
+    fontSize: 22,
+    color: '#FFD700',
+  },
+  modalContent: {
+    paddingHorizontal: 20,
+    maxHeight: '70%',
+  },
+  modalFooter: {
+    marginTop: 8,
+  },
+  clearButton: {
+    flex: 1,
+    backgroundColor: '#333',
+    paddingVertical: 15,
+    borderRadius: 25,
+    marginRight: 10,
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  applyButton: {
+    backgroundColor: '#FFD700',
+    paddingVertical: 12,
+    borderRadius: 25,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  applyButtonText: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 15,
+    color: '#000000',
   },
 });

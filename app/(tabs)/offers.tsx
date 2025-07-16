@@ -58,7 +58,9 @@ export default function OffersScreen() {
         // Lọc ra các mã giảm giá chưa hết hạn
         const currentDate = new Date();
         const validPromotions = result.data.filter(promotion =>
-          new Date(promotion.endDate) >= currentDate
+          new Date(promotion.endDate) >= currentDate && 
+          promotion.isActive === true &&
+          (promotion.currentUsage < promotion.maxUsage || promotion.maxUsage === 0)
         );
         setPromotions(validPromotions);
       } else {

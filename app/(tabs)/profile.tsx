@@ -4,7 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useState, useEffect, useCallback } from 'react';
 import { logout, getProfile } from '../../services/auth';
-import { getUserBookings } from '../../services/booking';
+import { getUserBookings, Booking } from '../../services/booking';
 
 export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState({
@@ -17,7 +17,8 @@ export default function ProfileScreen() {
   });
   const [loading, setLoading] = useState(true);
   const [totalTickets, setTotalTickets] = useState(0);
-  const [recentUserTickets, setRecentUserTickets] = useState([]);
+  // Khai báo kiểu dữ liệu cho state
+  const [recentUserTickets, setRecentUserTickets] = useState<Booking[]>([]);
 
   // Lấy thông tin profile khi màn hình được tải
   useEffect(() => {
@@ -50,7 +51,9 @@ export default function ProfileScreen() {
       const ticketCount = bookings.reduce((sum, booking) => sum + (booking.seatNumbers?.length || 0), 0);
       setTotalTickets(ticketCount);
       // Get 2-3 most recent bookings
-      const sorted = bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const sorted = [...bookings].sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
       setRecentUserTickets(sorted.slice(0, 3));
     } catch (error) {
       setTotalTickets(0);
@@ -98,6 +101,15 @@ export default function ProfileScreen() {
           style: "destructive"
         }
       ]
+    );
+  };
+
+  // Thêm hàm xử lý thông báo tính năng đang phát triển
+  const handleFeatureInDevelopment = () => {
+    Alert.alert(
+      "Thông báo",
+      "Tính năng đang được phát triển. Vui lòng thử lại sau.",
+      [{ text: "Đóng", style: "cancel" }]
     );
   };
 
@@ -169,7 +181,7 @@ export default function ProfileScreen() {
             <Text style={{ color: '#999', textAlign: 'center' }}>Chưa có vé nào</Text>
           ) : (
             recentUserTickets
-              .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .slice(0, 3)
               .map((ticket, idx) => (
                 <TouchableOpacity
@@ -182,9 +194,30 @@ export default function ProfileScreen() {
                     }
                   })}
                 >
-                  <View style={{ flexDirection: 'column', gap: 8 }}>
-                    <Text style={styles.movieTitle} numberOfLines={1}>{ticket.movieTitle || 'Không rõ phim'}</Text>
-                    <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleDateString('vi-VN') : ''}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.movieTitle} numberOfLines={1}>{ticket.movieTitle || 'Không rõ phim'}</Text>
+                      <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleDateString('vi-VN') : ''}</Text>
+                    </View>
+                    
+                    {/* Thêm trạng thái vé */}
+                    <View style={[
+                      styles.ticketStatus, 
+                      ticket.screeningTime && new Date(ticket.screeningTime) > new Date() 
+                        ? styles.statusUpcoming 
+                        : styles.statusUsed
+                    ]}>
+                      <Text style={[
+                        styles.ticketStatusText,
+                        ticket.screeningTime && new Date(ticket.screeningTime) > new Date() 
+                          ? { color: '#000' } 
+                          : { color: '#fff' }
+                      ]}>
+                        {ticket.screeningTime && new Date(ticket.screeningTime) > new Date() 
+                          ? 'Sắp tới' 
+                          : 'Đã sử dụng'}
+                      </Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))
@@ -208,15 +241,15 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.menuSection}>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleFeatureInDevelopment}>
           <Bell size={20} color="#FFD700" />
           <Text style={styles.menuText}>Thông báo</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleFeatureInDevelopment}>
           <Settings size={20} color="#FFD700" />
           <Text style={styles.menuText}>Cài đặt</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={handleFeatureInDevelopment}>
           <Shield size={20} color="#FFD700" />
           <Text style={styles.menuText}>Chính sách bảo mật</Text>
         </TouchableOpacity>
@@ -345,20 +378,19 @@ const styles = StyleSheet.create({
     color: '#999',
   },
   ticketStatus: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
   statusUpcoming: {
     backgroundColor: '#FFD700',
   },
   statusUsed: {
-    backgroundColor: '#333',
+    backgroundColor: '#444',
   },
   ticketStatusText: {
-    fontFamily: 'Montserrat-Bold',
-    fontSize: 10,
-    color: '#000000',
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 12,
   },
   rewardsCard: {
     flexDirection: 'row',

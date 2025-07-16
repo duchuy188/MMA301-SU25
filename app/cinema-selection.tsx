@@ -48,8 +48,15 @@ export default function CinemaSelectionScreen() {
   }, []);
 
   const handleCinemaSelect = (theater: Theater) => {
-    // Đã xóa điều hướng đến /datetime-selection
-    // Có thể thêm logic khác tại đây nếu cần
+    if (theater.status) {
+      router.push({
+        pathname: '/datetime-selection',
+        params: { 
+          theaterId: theater._id,
+          movieId: params.movieId
+        },
+      });
+    }
   };
 
   // Hiển thị loading hoặc error nếu cần

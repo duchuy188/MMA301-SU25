@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image, Modal } from 'react-native';
-import { ArrowLeft, Star, Clock, Calendar, Play } from 'lucide-react-native';
+import { ArrowLeft, Star, Clock, Calendar, Play, User, Users, Film, Building2, Flag } from 'lucide-react-native';
 import { useState } from 'react';
 import { Movie } from '../../services/movie';
 import { router } from 'expo-router';
 import YoutubePlayer from 'react-native-youtube-iframe';
-
+import React from 'react';
 interface MovieViewProps {
   movie: Movie;
   onBack: () => void;
@@ -13,6 +13,18 @@ interface MovieViewProps {
 export default function MovieView({ movie, onBack }: MovieViewProps) {
   const [trailerModalVisible, setTrailerModalVisible] = useState(false);
   const [playing, setPlaying] = useState(false);
+
+  // Thêm hàm formatDate
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  };
 
   const handleBookTicket = () => {
     router.push({
@@ -47,30 +59,52 @@ export default function MovieView({ movie, onBack }: MovieViewProps) {
       <View style={styles.movieInfo}>
         <Text style={styles.movieTitle}>{movie.vietnameseTitle || movie.title}</Text>
         
-        <View style={styles.movieMeta}>
-          <View style={styles.metaItem}>
-            <Star size={16} color="#FFD700" />
-            <Text style={styles.rating}>{movie.rating ? movie.rating.toFixed(1) : '7.5'}</Text>
+        <View style={styles.movieMetaContainer}>
+          <View style={styles.ratingContainer}>
+            <View style={styles.ratingItem}>
+              <Star size={16} color="#FFD700" />
+              <Text style={styles.rating}>{movie.rating ? movie.rating.toFixed(1) : '7.5'}</Text>
+            </View>
             <Text style={styles.voteCount}>({movie.votes || 0} đánh giá)</Text>
           </View>
-          <View style={styles.metaItem}>
-            <Clock size={16} color="#666" />
-            <Text style={styles.duration}>{formattedDuration}</Text>
-          </View>
-          <View style={styles.metaItem}>
-            <Calendar size={16} color="#666" />
-            <Text style={styles.genre}>{movie.genre}</Text>
+          
+          <View style={styles.infoContainer}>
+            <View style={styles.infoItem}>
+              <Clock size={16} color="#666" />
+              <Text style={styles.infoText}>{formattedDuration}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Calendar size={16} color="#666" />
+              <Text style={styles.infoText}>{movie.genre}</Text>
+            </View>
           </View>
         </View>
-
+        
         <View style={styles.movieDetails}>
           <View style={styles.detailRow}>
+            <User size={16} color="#FFD700" style={styles.detailIcon} />
             <Text style={styles.detailLabel}>Đạo diễn:</Text>
             <Text style={styles.detailValue}>{movie.directors?.join(', ')}</Text>
           </View>
           <View style={styles.detailRow}>
+            <Users size={16} color="#FFD700" style={styles.detailIcon} />
             <Text style={styles.detailLabel}>Diễn viên:</Text>
             <Text style={styles.detailValue}>{movie.actors?.join(', ')}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Calendar size={16} color="#FFD700" style={styles.detailIcon} />
+            <Text style={styles.detailLabel}>Ngày chiếu:</Text>
+            <Text style={styles.detailValue}>{formatDate(movie.releaseDate)}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Building2 size={16} color="#FFD700" style={styles.detailIcon} />
+            <Text style={styles.detailLabel}>Nhà SX:</Text>
+            <Text style={styles.detailValue}>{movie.producer}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Flag size={16} color="#FFD700" style={styles.detailIcon} />
+            <Text style={styles.detailLabel}>Quốc gia:</Text>
+            <Text style={styles.detailValue}>{movie.country}</Text>
           </View>
         </View>
 
@@ -189,14 +223,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
   },
-  movieMeta: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 20,
+  movieMetaContainer: {
     marginBottom: 30,
   },
-  metaItem: {
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  ratingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -212,12 +248,18 @@ const styles = StyleSheet.create({
     color: '#999',
     marginLeft: 4,
   },
-  duration: {
-    fontFamily: 'Montserrat-Medium',
-    fontSize: 14,
-    color: '#999',
+  infoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
   },
-  genre: {
+  infoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  infoText: {
     fontFamily: 'Montserrat-Medium',
     fontSize: 14,
     color: '#999',
@@ -233,6 +275,10 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     marginBottom: 12,
+    alignItems: 'center',
+  },
+  detailIcon: {
+    marginRight: 8,
   },
   detailLabel: {
     fontFamily: 'Montserrat-SemiBold',

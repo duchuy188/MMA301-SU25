@@ -86,6 +86,9 @@ export default function ChatbotScreen() {
     { text: 'Tư vấn ghế', onPress: () => handleQuickReply('Tư vấn chọn ghế tốt nhất'), icon: <Info size={14} color="#FFD700" /> },
   ]);
   
+  // Thêm state để theo dõi trạng thái đóng/mở của QuickReplies
+  const [showQuickReplies, setShowQuickReplies] = useState(true);
+
   // Hiệu ứng fade in cho header
   useEffect(() => {
     RNAnimated.timing(fadeAnim, {
@@ -995,47 +998,60 @@ export default function ChatbotScreen() {
     handleSend();
   };
 
-  // Thay thế component QuickReplies hiện tại bằng phiên bản mới
+  // Cập nhật component QuickReplies
   const QuickReplies = () => {
     // Chia mảng quickReplies thành 2 hàng
     const firstRow = quickReplies.slice(0, 3);
     const secondRow = quickReplies.slice(3);
 
     return (
-      <View style={styles.quickRepliesContainer}>
-        <View style={styles.quickRepliesRow}>
-          {firstRow.map((reply, index) => (
-            <TouchableOpacity
-              key={index}
-              style={[
-                styles.quickReplyButton,
-                index === 0 && {
-                  shadowColor: "#FFD700",
-                  shadowOffset: { width: 0, height: 0 },
-                  shadowOpacity: 0.5,
-                  shadowRadius: 5,
-                  elevation: 5
-                }
-              ]}
-              onPress={reply.onPress}
-            >
-              {reply.icon}
-              <Text style={styles.quickReplyText}>{reply.text}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-        <View style={styles.quickRepliesRow}>
-          {secondRow.map((reply, index) => (
-            <TouchableOpacity
-              key={index + 3}
-              style={styles.quickReplyButton}
-              onPress={reply.onPress}
-            >
-              {reply.icon}
-              <Text style={styles.quickReplyText}>{reply.text}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+      <View style={styles.quickRepliesWrapper}>
+        <TouchableOpacity 
+          style={styles.toggleButton}
+          onPress={() => setShowQuickReplies(!showQuickReplies)}
+        >
+          <Text style={styles.toggleButtonText}>
+            {showQuickReplies ? '▲ Ẩn gợi ý' : '▼ Hiện gợi ý'}
+          </Text>
+        </TouchableOpacity>
+        
+        {showQuickReplies && (
+          <View style={styles.quickRepliesContainer}>
+            <View style={styles.quickRepliesRow}>
+              {firstRow.map((reply, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.quickReplyButton,
+                    index === 0 && {
+                      shadowColor: "#FFD700",
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 5,
+                      elevation: 5
+                    }
+                  ]}
+                  onPress={reply.onPress}
+                >
+                  {reply.icon}
+                  <Text style={styles.quickReplyText}>{reply.text}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.quickRepliesRow}>
+              {secondRow.map((reply, index) => (
+                <TouchableOpacity
+                  key={index + 3}
+                  style={styles.quickReplyButton}
+                  onPress={reply.onPress}
+                >
+                  {reply.icon}
+                  <Text style={styles.quickReplyText}>{reply.text}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -1140,8 +1156,12 @@ export default function ChatbotScreen() {
                         ))}
                       </View>
                     )}
+
+                    {/* Đặt timestamp vào đây, bên trong message bubble */}
+                    <Text style={[styles.timestamp, {alignSelf: message.isUser ? 'flex-end' : 'flex-start'}]}>
+                      {formatTime(message.timestamp)}
+                    </Text>
                   </View>
-                  <Text style={styles.timestamp}>{formatTime(message.timestamp)}</Text>
                 </Animated.View>
               ))}
             </View>
@@ -1161,27 +1181,27 @@ export default function ChatbotScreen() {
         </View>
       )}
 
-        <View>
+        <View style={styles.bottomContainer}>
           <QuickReplies />
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Nhập tin nhắn..."
-          placeholderTextColor="#666"
-          multiline
-              maxLength={500}  // Add a reasonable max length
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-          onPress={handleSend}
-          disabled={!inputText.trim()}
-        >
-          <Send size={20} color={inputText.trim() ? '#000000' : '#666'} />
-        </TouchableOpacity>
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder="Nhập tin nhắn..."
+              placeholderTextColor="#666"
+              multiline
+              maxLength={500}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+              onPress={handleSend}
+              disabled={!inputText.trim()}
+            >
+              <Send size={20} color={inputText.trim() ? '#000000' : '#666'} />
+            </TouchableOpacity>
           </View>
-      </View>
+        </View>
     </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -1315,8 +1335,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     fontSize: 10,
     color: '#999',
-    alignSelf: 'flex-end',
-    marginTop: 4,
+    marginTop: 8,  // Tăng khoảng cách với nội dung bên trên
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -1589,6 +1608,21 @@ const styles = StyleSheet.create({
     borderTopColor: '#333',
     backgroundColor: '#0A0A0A',
   },
+  quickRepliesWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    backgroundColor: '#0A0A0A',
+  },
+  toggleButton: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    backgroundColor: '#1A1A1A',
+  },
+  toggleButtonText: {
+    color: '#FFD700',
+    fontSize: 12,
+    fontFamily: 'Montserrat-Medium',
+  },
   quickRepliesRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1690,5 +1724,23 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#333',
     paddingTop: 10,
+  },
+  statusUpcoming: {
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  statusUsed: {
+    backgroundColor: '#444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginLeft: 8,
+    color: '#FFFFFF',
+  },
+  bottomContainer: {
+    backgroundColor: '#000000',
   },
 });

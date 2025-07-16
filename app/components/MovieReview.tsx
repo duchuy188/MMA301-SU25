@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Image, ActivityIndicator } from 'react-native';
-import { Star, Camera, Image as ImageIcon } from 'lucide-react-native';
+import { Star, Clock, Calendar, Camera, Image as ImageIcon, BarChart } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating, getCurrentRatings, getAllUserRatings } from '../../services/movie';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -7,7 +7,7 @@ import { getCurrentUser } from '../../services/auth';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-
+import React from 'react';
 interface MovieReviewProps {
   movieId: string;
   onRatingUpdate: (newRating: number, newVotes: number) => void;
@@ -316,8 +316,16 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         setRating(tempRating);
         setShowRatingModal(false);
         
+        // Cập nhật phân bố đánh giá
+        const allRatings = await getAllUserRatings(movieId);
+        const distribution: { [key: number]: number } = {};
+        for (let i = 1; i <= 10; i++) {
+          distribution[i] = allRatings.filter((r: MovieReview) => r.rating === i).length;
+        }
+        setRatingDistribution(distribution);
+        
         const avgRating = await getCurrentRatings(movieId);
-        onRatingUpdate(avgRating, reviews.length);
+        onRatingUpdate(avgRating, allRatings.filter(r => r.rating > 0).length);
 
         Toast.show({
           type: 'success',
@@ -357,8 +365,16 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         setTempRating(0);
         setShowRatingModal(false);
         
+        // Cập nhật phân bố đánh giá
+        const allRatings = await getAllUserRatings(movieId);
+        const distribution: { [key: number]: number } = {};
+        for (let i = 1; i <= 10; i++) {
+          distribution[i] = allRatings.filter((r: MovieReview) => r.rating === i).length;
+        }
+        setRatingDistribution(distribution);
+        
         const avgRating = await getCurrentRatings(movieId);
-        onRatingUpdate(avgRating, reviews.length);
+        onRatingUpdate(avgRating, allRatings.filter(r => r.rating > 0).length);
 
         Toast.show({
           type: 'success',
@@ -724,7 +740,9 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         </Modal>
       </View>
       <View style={styles.ratingDistribution}>
-        <Text style={styles.distributionTitle}>Phân bố đánh giá</Text>
+        <Text style={styles.distributionTitle}>
+          <BarChart size={16} color="#FFD700" style={{marginRight: 8}} /> Phân bố đánh giá
+        </Text>
         <View style={styles.distributionBars}>
           {[...Array(10)].map((_, index) => {
             const starCount = 10 - index;
@@ -1013,6 +1031,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#FFD700',
     marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   distributionBars: {
     gap: 8,

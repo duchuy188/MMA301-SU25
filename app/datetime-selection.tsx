@@ -5,27 +5,7 @@ import { ArrowLeft, Calendar, Clock } from 'lucide-react-native';
 import { getPublicScreenings, Screening } from '../services/screening';
 
 
-const dates = [
-  { id: '1', date: '20', day: 'Thứ 2', month: 'Th12', isToday: false },
-  { id: '2', date: '21', day: 'Thứ 3', month: 'Th12', isToday: false },
-  { id: '3', date: '22', day: 'Thứ 4', month: 'Th12', isToday: true },
-  { id: '4', date: '23', day: 'Thứ 5', month: 'Th12', isToday: false },
-  { id: '5', date: '24', day: 'Thứ 6', month: 'Th12', isToday: false },
-  { id: '6', date: '25', day: 'Thứ 7', month: 'Th12', isToday: false },
-  { id: '7', date: '26', day: 'CN', month: 'Th12', isToday: false },
-];
 
-const timeSlots = [
-  { id: '1', time: '10:00', available: true, isVIP: false },
-  { id: '2', time: '12:30', available: true, isVIP: false },
-  { id: '3', time: '15:00', available: false, isVIP: false },
-  { id: '4', time: '17:30', available: true, isVIP: true },
-  { id: '5', time: '19:45', available: true, isVIP: true },
-  { id: '6', time: '22:00', available: true, isVIP: false },
-  { id: '7', time: '13:15', available: true, isVIP: false },
-  { id: '8', time: '16:00', available: true, isVIP: true },
-  { id: '9', time: '20:30', available: false, isVIP: false },
-];
 
 export default function DateTimeSelectionScreen() {
   const { theaterId, movieId } = useLocalSearchParams();
