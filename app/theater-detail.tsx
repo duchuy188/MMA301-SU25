@@ -404,7 +404,8 @@ export default function TheaterDetailScreen() {
                         </Text>
                         <View style={styles.ratingContainer}>
                           <Star size={12} color="#FFD700" />
-                          <Text style={styles.ratingText}>{item.movie.rating || 7.2}</Text>
+                          <Text style={styles.ratingText}>{item.movie.rating || '7.5'}</Text>
+                          <Text style={styles.voteCount}>({item.movie.votes || 0})</Text>
                         </View>
                       </View>
                       
@@ -776,6 +777,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Medium',
     fontSize: 13,
     color: '#FFD700',
+  },
+  voteCount: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 13,
+    color: '#888',
+    marginLeft: 4,
   },
   timesContainer: {
     flexDirection: 'row',

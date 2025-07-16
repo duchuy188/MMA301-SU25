@@ -58,10 +58,34 @@ export default function RootLayout() {
 
   return (
     <>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="splash" />
-        <Stack.Screen name="auth" />
-        <Stack.Screen name="(tabs)" />
+      <Stack 
+        screenOptions={{
+          headerShown: false,
+          animation: 'fade',
+          animationDuration: 150,
+          presentation: 'transparentModal',
+          contentStyle: { backgroundColor: '#000000' },
+          detachInactiveScreens: false
+        }}
+      >
+        <Stack.Screen 
+          name="splash" 
+          options={{
+            animation: 'none'
+          }}
+        />
+        <Stack.Screen 
+          name="auth" 
+          options={{
+            animation: 'fade'
+          }}
+        />
+        <Stack.Screen 
+          name="(tabs)" 
+          options={{
+            animation: 'fade'
+          }}
+        />
         <Stack.Screen name="movie-detail" />
         <Stack.Screen name="cinema-selection" />
         <Stack.Screen name="datetime-selection" />

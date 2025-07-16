@@ -39,7 +39,7 @@ export default function AuthScreen() {
 
     setLoading(true);
     try {
-      const response = await login(email, password);
+      const response = await login(email, password, rememberMe);
       // Chuyển hướng sau khi đăng nhập thành công
       Toast.show({
         type: 'success',

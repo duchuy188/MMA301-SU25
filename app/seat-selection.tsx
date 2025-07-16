@@ -32,9 +32,29 @@ const extractId = (idOrObject: string | { _id: string } | any): string => {
 export default function SeatSelectionScreen() {
   const params = useLocalSearchParams();
   const { screeningId } = params;
+  // Parse selectedSeats from params if present
+  const initialSelectedSeats = React.useMemo(() => {
+    if (params.selectedSeats) {
+      if (typeof params.selectedSeats === 'string') {
+        try {
+          return JSON.parse(params.selectedSeats);
+        } catch {
+          return params.selectedSeats.split(',').map((s: string) => s.trim());
+        }
+      }
+      if (Array.isArray(params.selectedSeats)) {
+        return params.selectedSeats;
+      }
+    }
+    return [];
+  }, [params.selectedSeats]);
+
+  // Lấy bookingId nếu có
+  const bookingId = params.bookingId ? (Array.isArray(params.bookingId) ? params.bookingId[0] : params.bookingId) : undefined;
+
   const [occupiedSeats, setOccupiedSeats] = useState<string[]>([]);
   const [vipSeats, setVipSeats] = useState<string[]>([]);
-  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>(initialSelectedSeats);
   const [pendingSeats, setPendingSeats] = useState<string[]>([]);
   const [ticketPrice, setTicketPrice] = useState<number>(0);
   const [screening, setScreening] = useState<any>(null);
@@ -255,18 +275,14 @@ export default function SeatSelectionScreen() {
     if (selectedSeats.length > 0 && screening && movie && theater) {
       setIsCreatingBooking(true);
       try {
-        // Get current user
         const currentUser = getCurrentUser();
-        
-        // Check for both _id and id fields
         const userId = currentUser?._id || currentUser?.id;
         if (!currentUser || !userId) {
           Alert.alert('Lỗi', 'Vui lòng đăng nhập để đặt vé');
           router.push('/auth');
           return;
         }
-
-        // Validate mã khuyến mãi một lần nữa trước khi tạo booking
+        // Validate mã khuyến mãi một lần nữa trước khi tạo/update booking
         if (appliedPromo?.code) {
           try {
             const validationResponse = await validatePromotionCode(
@@ -274,10 +290,8 @@ export default function SeatSelectionScreen() {
               ticketPrice,
               selectedSeats.length
             );
-            
             let validPromotion: Promotion | null = null;
             if (validationResponse.isValid) {
-              // Need to fetch the actual promotion after validation
               const promotionData = await getPromotionById(appliedPromo.code);
               if (promotionData.success && promotionData.data) {
                 validPromotion = promotionData.data;
@@ -285,7 +299,6 @@ export default function SeatSelectionScreen() {
             } else if ((validationResponse as any)._id && (validationResponse as any).code) {
               validPromotion = validationResponse as any as Promotion;
             }
-            
             if (!validPromotion || validPromotion.status !== 'approved' || !validPromotion.isActive) {
               Alert.alert('Lỗi', 'Mã khuyến mãi không còn hợp lệ. Vui lòng kiểm tra lại.');
               setAppliedPromo(null);
@@ -297,48 +310,55 @@ export default function SeatSelectionScreen() {
             return;
           }
         }
-        
-        // Tạo booking với status pending ngay khi chọn ghế  
         const baseTotal = selectedSeats.length * ticketPrice;
         const finalTotal = calculateTotal();
-        
-        const bookingData: any = {
-          userId: userId,
-          screeningId: screening._id,
-          seatNumbers: selectedSeats,
-          paymentStatus: 'pending',
-          totalPrice: finalTotal,
-        };
-        
-        // Thêm promotion code nếu có - QUAN TRỌNG: chỉ thêm khi có mã khuyến mãi
-        if (appliedPromo?.code) {
-          bookingData.code = appliedPromo.code; // Sử dụng mã khuyến mãi làm code
-          bookingData.promotionId = appliedPromo._id;
-          bookingData.discountAmount = discount;
+        // Nếu có bookingId thì update booking, ngược lại thì tạo mới
+        let bookingResult;
+        if (bookingId) {
+          // Update booking
+          const updateData: any = {
+            seatNumbers: selectedSeats,
+            totalPrice: finalTotal,
+            paymentStatus: 'pending',
+          };
+          if (appliedPromo?.code) {
+            updateData.code = appliedPromo.code;
+            updateData.promotionId = appliedPromo._id;
+            updateData.discountAmount = discount;
+          } else {
+            updateData.code = null;
+          }
+          bookingResult = await updateBooking(bookingId, updateData);
         } else {
-          // QUAN TRỌNG: Khi không có mã khuyến mãi, code sẽ là null
-          bookingData.code = null;
+          // Tạo booking mới
+          const bookingData: any = {
+            userId: userId,
+            screeningId: screening._id,
+            seatNumbers: selectedSeats,
+            paymentStatus: 'pending',
+            totalPrice: finalTotal,
+          };
+          if (appliedPromo?.code) {
+            bookingData.code = appliedPromo.code;
+            bookingData.promotionId = appliedPromo._id;
+            bookingData.discountAmount = discount;
+          } else {
+            bookingData.code = null;
+          }
+          bookingResult = await createBooking(bookingData);
         }
-        
-        const pendingBooking = await createBooking(bookingData);
-        
-        // Check for booking ID in different possible locations
-        let bookingId = null;
-        if (pendingBooking?._id) {
-          bookingId = pendingBooking._id;
-        } else if (pendingBooking?.data?._id) {
-          bookingId = pendingBooking.data._id;
-        } else if (pendingBooking?.booking?._id) {
-          bookingId = pendingBooking.booking._id;
-        } else if (pendingBooking?.id) {
-          bookingId = pendingBooking.id;
+        // Lấy bookingId mới/cũ
+        let nextBookingId = bookingId;
+        if (!nextBookingId) {
+          if (bookingResult?._id) nextBookingId = bookingResult._id;
+          else if (bookingResult?.data?._id) nextBookingId = bookingResult.data._id;
+          else if (bookingResult?.booking?._id) nextBookingId = bookingResult.booking._id;
+          else if (bookingResult?.id) nextBookingId = bookingResult.id;
         }
-        
-        if (!bookingId) {
-          Alert.alert('Lỗi', 'Không thể tạo booking. Server không trả về ID đặt vé.');
+        if (!nextBookingId) {
+          Alert.alert('Lỗi', 'Không thể tạo/cập nhật booking. Server không trả về ID đặt vé.');
           return;
         }
-        
         // Convert startTime to local time for display
         const getLocalTime = (dateTimeString: string) => {
           if (!dateTimeString) return '';
@@ -384,16 +404,13 @@ export default function SeatSelectionScreen() {
             finalTotal: finalTotal.toString(),
             appliedPromoCode: appliedPromo?.code || '',
             screeningId: screening._id,
-            bookingId: bookingId,
+            bookingId: nextBookingId,
           },
         });
       } catch (error: any) {
         let errorMessage = 'Có lỗi xảy ra. Vui lòng thử lại.';
-        
-        // Check for specific error messages
         if (error.message?.includes('already booked')) {
           errorMessage = 'Một số ghế đã được đặt bởi người khác. Vui lòng chọn ghế khác.';
-          // Reset selected seats if they're already booked
           setSelectedSeats([]);
           setAppliedPromo(null);
           setDiscount(0);
@@ -407,7 +424,6 @@ export default function SeatSelectionScreen() {
         } else if (error.message) {
           errorMessage = error.message;
         }
-        
         Alert.alert('Lỗi', errorMessage);
       } finally {
         setIsCreatingBooking(false);
@@ -426,12 +442,13 @@ export default function SeatSelectionScreen() {
 
   useFocusEffect(
     React.useCallback(() => {
-      // Reset selected seats when screen is focused
-      setSelectedSeats([]);
-      setAppliedPromo(null);
-      setDiscount(0);
-      setPromoCode('');
-      
+      // Only reset selected seats if not coming from update (i.e. no selectedSeats in params)
+      if (!params.selectedSeats) {
+        setSelectedSeats([]);
+        setAppliedPromo(null);
+        setDiscount(0);
+        setPromoCode('');
+      }
       // Tải lại danh sách ghế khi màn hình được focus
       if (screeningId) {
         const fetchSeats = async () => {
@@ -477,7 +494,7 @@ export default function SeatSelectionScreen() {
         fetchSeats();
       }
       return () => {};
-    }, [screeningId])
+    }, [screeningId, params.selectedSeats])
   );
 
   return (

@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Shield, CreditCard, Smartphone, QrCode } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus } from '../services/booking';
+import { createBooking, updateBookingPaymentStatus, getBookingById, updateBookingPaymentStatusViaStatus, cancelBooking, updateBooking } from '../services/booking';
 import React from 'react';
 interface TicketInfo {
   movie: string;
@@ -472,7 +472,20 @@ export default function PaymentScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (ticketInfo && ticketInfo.bookingId) {
+            router.replace({
+              pathname: '/seat-selection',
+              params: {
+                screeningId: ticketInfo.screeningId,
+                selectedSeats: JSON.stringify(ticketInfo.seats),
+                bookingId: ticketInfo.bookingId,
+              },
+            });
+          } else {
+            router.back();
+          }
+        }}>
           <ArrowLeft size={24} color="#FFD700" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Thanh toán</Text>
@@ -595,6 +608,31 @@ export default function PaymentScreen() {
                   XÁC NHẬN THANH TOÁN
                 </Text>
               )}
+            </TouchableOpacity>
+            {/* Button: Cancel Booking */}
+            <TouchableOpacity
+              style={[styles.confirmButton, { marginTop: 12, backgroundColor: '#FF5722' }]}
+              onPress={async () => {
+                if (!ticketInfo || !ticketInfo.bookingId) {
+                  Alert.alert('Lỗi', 'Không tìm thấy thông tin đặt vé để hủy.');
+                  return;
+                }
+                try {
+                  await cancelBooking(ticketInfo.bookingId);
+                  Alert.alert('Đã hủy đặt vé', 'Đặt vé đã được hủy thành công.', [
+                    {
+                      text: 'Về trang chủ',
+                      onPress: () => {
+                        router.replace('/');
+                      },
+                    },
+                  ]);
+                } catch (error: any) {
+                  Alert.alert('Lỗi', error.message || 'Không thể hủy đặt vé.');
+                }
+              }}
+            >
+              <Text style={styles.confirmButtonText}>HỦY ĐẶT VÉ</Text>
             </TouchableOpacity>
           </View>
         </>

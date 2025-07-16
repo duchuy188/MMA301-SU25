@@ -1,24 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
-import { Crown, Star, Ticket, Gift, Settings, Bell, Shield, LogOut } from 'lucide-react-native';
+import { Crown, Star, Ticket, Gift, Settings, Bell, Shield, LogOut, MapPin, Calendar, Clock, QrCode } from 'lucide-react-native';
 import { router, useFocusEffect } from 'expo-router';
 import Toast from 'react-native-toast-message';
 import { useState, useEffect, useCallback } from 'react';
 import { logout, getProfile } from '../../services/auth';
-
-const recentTickets = [
-  {
-    id: '1',
-    movie: 'Avengers: Endgame',
-    date: '25/12/2024',
-    status: 'Sắp tới',
-  },
-  {
-    id: '2',
-    movie: 'The Batman',
-    date: '20/12/2024',
-    status: 'Đã sử dụng',
-  },
-];
+import { getUserBookings } from '../../services/booking';
 
 export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState({
@@ -30,10 +16,13 @@ export default function ProfileScreen() {
     status: true
   });
   const [loading, setLoading] = useState(true);
+  const [totalTickets, setTotalTickets] = useState(0);
+  const [recentUserTickets, setRecentUserTickets] = useState([]);
 
   // Lấy thông tin profile khi màn hình được tải
   useEffect(() => {
     loadUserProfile();
+    fetchUserTickets();
   }, []);
 
   const loadUserProfile = async () => {
@@ -54,10 +43,26 @@ export default function ProfileScreen() {
     }
   };
 
+  const fetchUserTickets = async () => {
+    try {
+      const result = await getUserBookings();
+      const bookings = result.bookings || [];
+      const ticketCount = bookings.reduce((sum, booking) => sum + (booking.seatNumbers?.length || 0), 0);
+      setTotalTickets(ticketCount);
+      // Get 2-3 most recent bookings
+      const sorted = bookings.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      setRecentUserTickets(sorted.slice(0, 3));
+    } catch (error) {
+      setTotalTickets(0);
+      setRecentUserTickets([]);
+    }
+  };
+
   // Sử dụng useFocusEffect để tải lại dữ liệu mỗi khi màn hình được focus
   useFocusEffect(
     useCallback(() => {
       loadUserProfile();
+      fetchUserTickets();
     }, [])
   );
 
@@ -96,39 +101,53 @@ export default function ProfileScreen() {
     );
   };
 
+  // Tính cấp thành viên theo điểm thưởng
+  const rewardPoints = totalTickets * 100;
+  let memberLevel = 'Thành viên';
+  let memberColor = '#FFD700'; // vàng mặc định
+  if (rewardPoints >= 5000) {
+    memberLevel = 'Thành viên Kim Cương';
+    memberColor = '#A259F7'; // tím
+  } else if (rewardPoints >= 3000) {
+    memberLevel = 'Thành viên Vàng';
+    memberColor = '#FFD700'; // vàng
+  } else if (rewardPoints >= 1000) {
+    memberLevel = 'Thành viên Bạc';
+    memberColor = '#B0B0B0'; // xám
+  }
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <TouchableOpacity onPress={() => router.push('/edit-profile')}>
-            <Image
-              source={{ 
-                uri: userProfile.avatar 
-                  ? userProfile.avatar 
-                  : 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150' 
-              }}
-              style={styles.avatar}
-            />
+            {userProfile.avatar ? (
+              <Image source={{ uri: userProfile.avatar }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, { backgroundColor: '#333', justifyContent: 'center', alignItems: 'center' }]}> 
+                <Text style={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}>
+                  {userProfile.name ? userProfile.name.charAt(0).toUpperCase() : '?'}
+                </Text>
+              </View>
+            )}
             <View style={styles.goldRing} />
           </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{userProfile.name}</Text>
-        <View style={styles.membershipBadge}>
+        <View style={[styles.membershipBadge, { backgroundColor: memberColor }]}> 
           <Crown size={16} color="#000000" />
-          <Text style={styles.membershipText}>
-            {userProfile.role === 'admin' ? 'Quản trị viên' : 'Thành viên Vàng'}
-          </Text>
+          <Text style={styles.membershipText}>{memberLevel}</Text>
         </View>
       </View>
 
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>12</Text>
+          <Text style={styles.statNumber}>{totalTickets}</Text>
           <Text style={styles.statLabel}>Vé đã đặt</Text>
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>2,450</Text>
+          <Text style={styles.statNumber}>{totalTickets * 100}</Text>
           <Text style={styles.statLabel}>Điểm thưởng</Text>
         </View>
         <View style={styles.statDivider} />
@@ -139,22 +158,37 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Vé gần đây</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+          <Text style={styles.sectionTitle}>Vé gần đây</Text>
+          <TouchableOpacity onPress={() => router.push('/tickets')} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFD700', borderRadius: 8 }}>
+            <Text style={{ color: '#000', fontFamily: 'Montserrat-SemiBold', fontSize: 14 }}>Xem tất cả</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.ticketsList}>
-          {recentTickets.map((ticket) => (
-            <View key={ticket.id} style={styles.ticketItem}>
-              <View style={styles.ticketInfo}>
-                <Text style={styles.ticketMovie}>{ticket.movie}</Text>
-                <Text style={styles.ticketDate}>{ticket.date}</Text>
-              </View>
-              <View style={[
-                styles.ticketStatus,
-                ticket.status === 'Sắp tới' ? styles.statusUpcoming : styles.statusUsed
-              ]}>
-                <Text style={styles.ticketStatusText}>{ticket.status}</Text>
-              </View>
-            </View>
-          ))}
+          {recentUserTickets.length === 0 ? (
+            <Text style={{ color: '#999', textAlign: 'center' }}>Chưa có vé nào</Text>
+          ) : (
+            recentUserTickets
+              .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+              .slice(0, 3)
+              .map((ticket, idx) => (
+                <TouchableOpacity
+                  key={ticket._id || idx}
+                  style={styles.ticketCard}
+                  onPress={() => router.push({
+                    pathname: '/historyticket',
+                    params: {
+                      booking: JSON.stringify(ticket),
+                    }
+                  })}
+                >
+                  <View style={{ flexDirection: 'column', gap: 8 }}>
+                    <Text style={styles.movieTitle} numberOfLines={1}>{ticket.movieTitle || 'Không rõ phim'}</Text>
+                    <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleDateString('vi-VN') : ''}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
+          )}
         </View>
       </View>
 
@@ -165,14 +199,11 @@ export default function ProfileScreen() {
             <Star size={24} color="#FFD700" />
           </View>
           <View style={styles.rewardsContent}>
-            <Text style={styles.rewardsPoints}>2,450 điểm</Text>
+            <Text style={styles.rewardsPoints}>{totalTickets * 100} điểm</Text>
             <Text style={styles.rewardsDescription}>
-              Đổi điểm lấy vé xem phim và combo bắp nước
+              Vui lòng đến rạp để đổi điểm lấy vé xem phim và combo bắp nước
             </Text>
           </View>
-          <TouchableOpacity style={styles.rewardsButton}>
-            <Text style={styles.rewardsButtonText}>Đổi điểm</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -396,5 +427,62 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#000000',
+  },
+  // Thêm style cho box vé gần đây
+  ticketCard: {
+    backgroundColor: '#222',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#444',
+  },
+  ticketContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  ticketRight: {
+    flex: 1,
+  },
+  ticketHeader: {
+    marginBottom: 8,
+  },
+  movieTitle: {
+    fontFamily: 'Montserrat-Bold',
+    fontSize: 16,
+    color: '#fff',
+  },
+  ticketDetails: {
+    marginBottom: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  seatLabel: {
+    color: '#FFD700',
+    fontSize: 14,
+    marginRight: 4,
+  },
+  seatText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  qrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFD700',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 10,
+  },
+  qrButtonText: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 14,
+    color: '#000',
   },
 });

@@ -7,6 +7,7 @@ import { getTheaters, Theater } from '../../services/theater';
 import { getAllPromotions, Promotion } from '../../services/promotion';
 import Carousel from 'react-native-reanimated-carousel';
 import Animated, { useSharedValue, useAnimatedStyle, interpolate } from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -43,6 +44,36 @@ const shuffleArray = <T,>(array: T[]): T[] => {
   }
   return shuffled;
 };
+
+function getLocalMovieStats(movieId: string, backendRating: number, backendVotes: number, setStats: (rating: number, votes: number) => void) {
+  AsyncStorage.getAllKeys().then(keys => {
+    const voteKeys = keys.filter(key => key.startsWith(`movie_rating_${movieId}_`));
+    const votes = Math.max(backendVotes, voteKeys.length);
+    // Lấy tất cả rating
+    Promise.all(voteKeys.map(key => AsyncStorage.getItem(key))).then(ratings => {
+      const validRatings = ratings.map(r => parseInt(r || '0')).filter(r => r > 0);
+      const rating = validRatings.length > 0 ? (validRatings.reduce((a, b) => a + b, 0) / validRatings.length) : backendRating;
+      setStats(Number(rating.toFixed(1)), votes);
+    });
+  });
+}
+
+function MovieStats({ movie }: { movie: Movie }) {
+  const [rating, setRating] = useState<number>(movie.rating || 7.5);
+  const [votes, setVotes] = useState<number>(movie.votes || 0);
+  useEffect(() => {
+    getLocalMovieStats(movie._id, movie.rating || 7.5, movie.votes || 0, (r, v) => {
+      setRating(r);
+      setVotes(v);
+    });
+  }, [movie._id, movie.rating, movie.votes]);
+  return (
+    <>
+      <Star size={12} color="#FFD700" fill="#FFD700" />
+      <Text style={styles.ratingSmall}>{rating}/10</Text>
+    </>
+  );
+}
 
 export default function HomeScreen() {
   const [movies, setMovies] = useState<Movie[]>(cachedMovies);
@@ -522,8 +553,7 @@ export default function HomeScreen() {
                   {movie.genre}
                 </Text>
                 <View style={styles.movieMetaSmall}>
-                  <Star size={12} color="#FFD700" />
-                  <Text style={styles.ratingSmall}>{movie.rating || '7.5'}</Text>
+                  <MovieStats movie={movie} />
                 </View>
               </View>
             </TouchableOpacity>
@@ -935,6 +965,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Medium',
     fontSize: 12,
     color: '#FFD700',
+  },
+  voteCount: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
   },
   noResultsContainer: {
     width: '100%',

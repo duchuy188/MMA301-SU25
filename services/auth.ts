@@ -61,7 +61,7 @@ export const register = async (fullName: string, email: string, phone: string, p
   }
 };
 
-export const login = async (email: string, password: string) => {
+export const login = async (email: string, password: string, rememberMe: boolean = false) => {
   try {
     const response = await api.post('/auth/login', {
       email,
@@ -73,7 +73,7 @@ export const login = async (email: string, password: string) => {
       currentUser = response.data.user;
       api.defaults.headers.common['Authorization'] = `Bearer ${currentToken}`;
       
-      // Lưu token vào AsyncStorage
+      // Always save user data to AsyncStorage
       await saveAuthTokens(currentToken, currentUser);
     }
     
@@ -108,6 +108,8 @@ export const logout = async () => {
     // Xóa token khỏi AsyncStorage
     await AsyncStorage.removeItem('auth_token');
     await AsyncStorage.removeItem('auth_user');
+    // Xóa reviews khi đăng xuất
+    await AsyncStorage.removeItem('movieReviews');
   } catch (error) {
     console.error('Lỗi khi đăng xuất:', error);
   }
