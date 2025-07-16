@@ -5,7 +5,6 @@ import Toast from 'react-native-toast-message';
 import { useState, useEffect, useCallback } from 'react';
 import { logout, getProfile } from '../../services/auth';
 import { getUserBookings } from '../../services/booking';
-import { getAllPromotions } from '../../services/promotion';
 
 export default function ProfileScreen() {
   const [userProfile, setUserProfile] = useState({
@@ -19,13 +18,11 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [totalTickets, setTotalTickets] = useState(0);
   const [recentUserTickets, setRecentUserTickets] = useState([]);
-  const [promotionCount, setPromotionCount] = useState(0);
 
   // Lấy thông tin profile khi màn hình được tải
   useEffect(() => {
     loadUserProfile();
     fetchUserTickets();
-    fetchPromotionCount();
   }, []);
 
   const loadUserProfile = async () => {
@@ -61,27 +58,11 @@ export default function ProfileScreen() {
     }
   };
 
-  const fetchPromotionCount = async () => {
-    try {
-      const res = await getAllPromotions('approved');
-      if (res.data) {
-        setPromotionCount(res.data.length);
-      } else if (typeof res.count === 'number') {
-        setPromotionCount(res.count);
-      } else {
-        setPromotionCount(0);
-      }
-    } catch {
-      setPromotionCount(0);
-    }
-  };
-
   // Sử dụng useFocusEffect để tải lại dữ liệu mỗi khi màn hình được focus
   useFocusEffect(
     useCallback(() => {
       loadUserProfile();
       fetchUserTickets();
-      fetchPromotionCount();
     }, [])
   );
 
@@ -171,13 +152,18 @@ export default function ProfileScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Text style={styles.statNumber}>{promotionCount}</Text>
+          <Text style={styles.statNumber}>5</Text>
           <Text style={styles.statLabel}>Ưu đãi</Text>
         </View>
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Vé gần đây</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 15 }}>
+          <Text style={styles.sectionTitle}>Vé gần đây</Text>
+          <TouchableOpacity onPress={() => router.push('/tickets')} style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: '#FFD700', borderRadius: 8 }}>
+            <Text style={{ color: '#000', fontFamily: 'Montserrat-SemiBold', fontSize: 14 }}>Xem tất cả</Text>
+          </TouchableOpacity>
+        </View>
         <View style={styles.ticketsList}>
           {recentUserTickets.length === 0 ? (
             <Text style={{ color: '#999', textAlign: 'center' }}>Chưa có vé nào</Text>
@@ -186,53 +172,21 @@ export default function ProfileScreen() {
               .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
               .slice(0, 3)
               .map((ticket, idx) => (
-                <View key={ticket._id || idx} style={styles.ticketCard}>
-                  <View style={styles.ticketContent}>
-                    <View style={styles.ticketRight}>
-                      <View style={styles.ticketHeader}>
-                        <Text style={styles.movieTitle} numberOfLines={1}>{ticket.movieTitle || 'Không rõ phim'}</Text>
-                      </View>
-                      <View style={styles.ticketDetails}>
-                        <View style={styles.detailRow}>
-                          <MapPin size={14} color="#666" />
-                          <Text style={styles.seatText} numberOfLines={1}>{ticket.screeningId?.roomId?.theaterName || ticket.screeningId?.theaterId?.name || ticket.screeningId?.roomId?.name || 'Rạp ?'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Calendar size={14} color="#666" />
-                          <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleDateString('vi-VN') : ''}</Text>
-                          <Clock size={14} color="#666" />
-                          <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.seatLabel}>Ghế:</Text>
-                          <Text style={styles.seatText}>{ticket.seatNumbers?.join(', ') || '?'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.seatLabel}>Phòng:</Text>
-                          <Text style={styles.seatText}>{ticket.roomName || ticket.screeningId?.roomId?.name || '?'}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.seatLabel}>Mã vé:</Text>
-                          <Text style={styles.seatText}>{ticket.code || ticket._id}</Text>
-                        </View>
-                        <View style={styles.detailRow}>
-                          <Text style={styles.seatLabel}>Ngày đặt:</Text>
-                          <Text style={styles.seatText}>{ticket.bookingDate ? new Date(ticket.bookingDate).toLocaleString('vi-VN') : ''}</Text>
-                        </View>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.qrButton}
-                        onPress={() => router.push({
-                          pathname: '/historyticket',
-                          params: { booking: JSON.stringify(ticket) }
-                        })}
-                      >
-                        <QrCode size={16} color="#000" />
-                        <Text style={styles.qrButtonText}>Xem mã QR</Text>
-                      </TouchableOpacity>
-                    </View>
+                <TouchableOpacity
+                  key={ticket._id || idx}
+                  style={styles.ticketCard}
+                  onPress={() => router.push({
+                    pathname: '/historyticket',
+                    params: {
+                      booking: JSON.stringify(ticket),
+                    }
+                  })}
+                >
+                  <View style={{ flexDirection: 'column', gap: 8 }}>
+                    <Text style={styles.movieTitle} numberOfLines={1}>{ticket.movieTitle || 'Không rõ phim'}</Text>
+                    <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleDateString('vi-VN') : ''}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
           )}
         </View>
