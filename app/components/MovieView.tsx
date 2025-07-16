@@ -51,6 +51,7 @@ export default function MovieView({ movie, onBack }: MovieViewProps) {
           <View style={styles.metaItem}>
             <Star size={16} color="#FFD700" />
             <Text style={styles.rating}>{movie.rating ? movie.rating.toFixed(1) : '7.5'}</Text>
+            <Text style={styles.voteCount}>({movie.votes || 0} đánh giá)</Text>
           </View>
           <View style={styles.metaItem}>
             <Clock size={16} color="#666" />
@@ -204,6 +205,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Bold',
     fontSize: 16,
     color: '#FFD700',
+  },
+  voteCount: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 14,
+    color: '#999',
+    marginLeft: 4,
   },
   duration: {
     fontFamily: 'Montserrat-Medium',

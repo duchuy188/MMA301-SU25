@@ -41,6 +41,7 @@ export interface MovieReview {
     userName: string;
     userEmail: string; // Thêm trường email
     isAnonymous: boolean; // Thêm trường để đánh dấu review ẩn danh
+    imageUrl?: string; // Optional image URL field
     createdAt: string;
 }
 

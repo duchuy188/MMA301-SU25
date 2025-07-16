@@ -1,11 +1,12 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
-import { Star } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Image } from 'react-native';
+import { Star, Camera, Image as ImageIcon } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
-import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating, getCurrentRatings } from '../../services/movie';
+import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating, getCurrentRatings, getAllUserRatings } from '../../services/movie';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentUser } from '../../services/auth';
 import Toast from 'react-native-toast-message';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 
 interface MovieReviewProps {
   movieId: string;
@@ -24,6 +25,9 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
   const [userReview, setUserReview] = useState<MovieReview | null>(null);
   const [isEditingRating, setIsEditingRating] = useState(false);
   const [showAllCommentsModal, setShowAllCommentsModal] = useState(false);
+  const [ratingDistribution, setRatingDistribution] = useState<{ [key: number]: number }>({});
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [reviewImages, setReviewImages] = useState<{[key: string]: string}>({});
 
   // Load saved rating from AsyncStorage when component mounts
   useEffect(() => {
@@ -53,6 +57,14 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         const movieReviews = await getMovieReviews(movieId);
         setReviews(movieReviews);
 
+        // Calculate rating distribution
+        const allRatings = await getAllUserRatings(movieId);
+        const distribution: { [key: number]: number } = {};
+        for (let i = 1; i <= 10; i++) {
+          distribution[i] = allRatings.filter((r: MovieReview) => r.rating === i).length;
+        }
+        setRatingDistribution(distribution);
+
         const avgRating = await getCurrentRatings(movieId);
         onRatingUpdate(avgRating, movieReviews.length);
       } catch (error) {
@@ -61,6 +73,23 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     };
     loadReviews();
   }, [movieId]);
+
+  // Load images from AsyncStorage
+  useEffect(() => {
+    const loadImages = async () => {
+      const loadedImages: {[key: string]: string} = {};
+      for (const review of reviews) {
+        if (review.imageUrl?.startsWith('review_image_')) {
+          const uri = await AsyncStorage.getItem(review.imageUrl);
+          if (uri) {
+            loadedImages[review.imageUrl] = uri;
+          }
+        }
+      }
+      setReviewImages(loadedImages);
+    };
+    loadImages();
+  }, [reviews]);
 
   const handleSubmitRating = async () => {
     const currentUser = getCurrentUser();
@@ -153,10 +182,11 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
       return;
     }
 
-    if (!comment.trim()) {
+    // Kiểm tra có ảnh hoặc bình luận không
+    if (!comment.trim() && !selectedImage) {
       Toast.show({
         type: 'error',
-        text1: 'Vui lòng nhập bình luận',
+        text1: 'Vui lòng nhập bình luận hoặc chọn ảnh',
         visibilityTime: 3000,
       });
       return;
@@ -176,14 +206,23 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         return;
       }
 
+      // Lưu ảnh vào AsyncStorage nếu có
+      let imageUrl: string | undefined;
+      if (selectedImage) {
+        const imageKey = `review_image_${movieId}_${currentUser._id}_${Date.now()}`;
+        await AsyncStorage.setItem(imageKey, selectedImage);
+        imageUrl = imageKey;
+      }
+
       const review: MovieReview = {
         userId: currentUser._id,
         movieId: movieId,
-        rating: 0, // Rating will be added from current rating in saveMovieReview
-        comment: comment.trim(),
+        rating: 0,
+        comment: comment.trim() || '📸', // Nếu không có comment thì hiển thị emoji camera
         userName: isAnonymous ? 'Ẩn danh' : userData.name,
         userEmail: userData.email,
         isAnonymous: isAnonymous,
+        imageUrl: imageUrl,
         createdAt: new Date().toISOString()
       };
 
@@ -192,12 +231,21 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         const updatedReviews = await getMovieReviews(movieId);
         setReviews(updatedReviews);
         
+        // Cập nhật reviewImages nếu có ảnh mới
+        if (imageUrl && selectedImage) {
+          setReviewImages(prev => ({
+            ...prev,
+            [imageUrl]: selectedImage
+          }));
+        }
+        
         setComment('');
         setIsAnonymous(false);
+        setSelectedImage(null);
         
         Toast.show({
           type: 'success',
-          text1: 'Bình luận thành công',
+          text1: 'Gửi thành công',
           visibilityTime: 3000,
         });
       }
@@ -362,6 +410,73 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     });
   };
 
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Cần quyền truy cập thư viện ảnh',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể chọn ảnh',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Toast.show({
+          type: 'error',
+          text1: 'Cần quyền truy cập camera',
+          visibilityTime: 3000,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+      });
+
+      if (!result.canceled) {
+        setSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Toast.show({
+        type: 'error',
+        text1: 'Không thể chụp ảnh',
+        text2: 'Vui lòng thử lại sau',
+        visibilityTime: 3000,
+      });
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.reviewSection}>
@@ -397,6 +512,26 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
               value={comment}
               onChangeText={setComment}
             />
+
+            {selectedImage && (
+              <View style={styles.selectedImageContainer}>
+                <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+                <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
+                  <Text style={styles.removeImageText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <View style={styles.imageButtons}>
+              <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
+                <Camera size={20} color="#FFD700" />
+                <Text style={styles.imageButtonText}>Chụp ảnh</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+                <ImageIcon size={20} color="#FFD700" />
+                <Text style={styles.imageButtonText}>Chọn ảnh</Text>
+              </TouchableOpacity>
+            </View>
             
             <TouchableOpacity
               style={styles.anonymousOption}
@@ -409,11 +544,16 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.submitCommentButton, !comment.trim() && styles.submitCommentButtonDisabled]}
+              style={[
+                styles.submitCommentButton,
+                (!comment.trim() && !selectedImage) && styles.submitCommentButtonDisabled
+              ]}
               onPress={handleSubmitComment}
-              disabled={!comment.trim()}
+              disabled={!comment.trim() && !selectedImage}
             >
-              <Text style={styles.submitCommentButtonText}>Gửi bình luận</Text>
+              <Text style={styles.submitCommentButtonText}>
+                {selectedImage ? 'Gửi' : 'Gửi bình luận'}
+              </Text>
             </TouchableOpacity>
           </View>
         )}
@@ -450,6 +590,17 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
                 <Text style={styles.reviewComment}>
                   💬 {review.comment}
                 </Text>
+                {review.imageUrl && (
+                  <Image 
+                    source={{ 
+                      uri: review.imageUrl.startsWith('review_image_')
+                        ? reviewImages[review.imageUrl] || ''
+                        : review.imageUrl
+                    }} 
+                    style={styles.reviewImage}
+                    resizeMode="cover"
+                  />
+                )}
               </View>
             ))}
 
@@ -531,6 +682,27 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
             </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
+      </View>
+      <View style={styles.ratingDistribution}>
+        <Text style={styles.distributionTitle}>Phân bố đánh giá</Text>
+        <View style={styles.distributionBars}>
+          {[...Array(10)].map((_, index) => {
+            const starCount = 10 - index;
+            const count = ratingDistribution[starCount] || 0;
+            const totalRatings = Object.values(ratingDistribution).reduce((a, b) => a + b, 0);
+            const percentage = totalRatings > 0 ? (count / totalRatings) * 100 : 0;
+            
+            return (
+              <View key={starCount} style={styles.distributionRow}>
+                <Text style={styles.distributionStar}>{starCount}</Text>
+                <View style={styles.distributionBarContainer}>
+                  <View style={[styles.distributionBarFill, { width: `${percentage}%` }]} />
+                </View>
+                <Text style={styles.distributionCount}>{count}</Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
     </ScrollView>
   );
@@ -789,5 +961,108 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  ratingDistribution: {
+    backgroundColor: '#2a2a2a',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  distributionTitle: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 16,
+    color: '#FFD700',
+    marginBottom: 12,
+  },
+  distributionBars: {
+    gap: 8,
+  },
+  distributionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  distributionStar: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 12,
+    color: '#fff',
+    width: 20,
+    textAlign: 'right',
+  },
+  distributionBarContainer: {
+    flex: 1,
+    height: 8,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  distributionBarFill: {
+    height: '100%',
+    backgroundColor: '#FFD700',
+    borderRadius: 4,
+  },
+  distributionCount: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 12,
+    color: '#999',
+    width: 30,
+  },
+  imageButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 12,
+    marginBottom: 12,
+    gap: 12,
+  },
+  imageButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FFD700',
+    gap: 8,
+  },
+  imageButtonText: {
+    color: '#FFD700',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  selectedImageContainer: {
+    marginTop: 12,
+    marginBottom: 12,
+    position: 'relative',
+  },
+  selectedImage: {
+    width: '100%',
+    height: 120, // Giảm chiều cao xuống
+    borderRadius: 8,
+    objectFit: 'cover', // Đảm bảo ảnh không bị méo
+  },
+  removeImageButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  removeImageText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  reviewImage: {
+    width: '40%', // Chỉ chiếm 40% chiều rộng của review
+    height: 100, // Giảm chiều cao xuống
+    borderRadius: 8,
+    marginTop: 12,
+    alignSelf: 'flex-start', // Căn lề trái
   },
 }); 
