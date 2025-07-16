@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView } from 'react-native';
 import { Star } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating, getCurrentRatings } from '../../services/movie';
@@ -23,6 +23,7 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
   const [reviews, setReviews] = useState<MovieReview[]>([]);
   const [userReview, setUserReview] = useState<MovieReview | null>(null);
   const [isEditingRating, setIsEditingRating] = useState(false);
+  const [showAllCommentsModal, setShowAllCommentsModal] = useState(false);
 
   // Load saved rating from AsyncStorage when component mounts
   useEffect(() => {
@@ -191,7 +192,6 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         const updatedReviews = await getMovieReviews(movieId);
         setReviews(updatedReviews);
         
-        setShowCommentModal(false);
         setComment('');
         setIsAnonymous(false);
         
@@ -343,166 +343,61 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
   };
 
   const handleCommentButtonClick = async () => {
-    setComment('');
-    setIsAnonymous(false);
-    const currentRating = await getCurrentRating();
-    setRating(currentRating);
-    setTempRating(currentRating);
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      Toast.show({
+        type: 'error',
+        text1: 'Bạn cần đăng nhập để bình luận',
+        visibilityTime: 3000,
+      });
+      return;
+    }
     setShowCommentModal(true);
   };
 
+  const handleViewAllComments = () => {
+    router.push({
+      pathname: '/all-comments',
+      params: { movieId }
+    });
+  };
+
   return (
-    <View style={styles.reviewSection}>
-      <Text style={styles.sectionTitle}>Đánh giá và Bình luận</Text>
-      
-      {getCurrentUser() ? (
-        <View style={styles.actionButtons}>
+    <ScrollView style={styles.container}>
+      <View style={styles.reviewSection}>
+        <Text style={styles.sectionTitle}>Bình luận gần đây</Text>
+        
+        {getCurrentUser() ? (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.ratingButton]}
+              onPress={handleRatingButtonClick}
+            >
+              <Star size={20} color="#000" />
+              <Text style={styles.actionButtonText}>Đánh giá</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
           <TouchableOpacity
-            style={[styles.actionButton, styles.ratingButton]}
-            onPress={handleRatingButtonClick}
+            style={styles.reviewButton}
+            onPress={() => router.push('/auth')}
           >
-            <Star size={20} color="#000" />
-            <Text style={styles.actionButtonText}>Đánh giá</Text>
+            <Text style={styles.reviewButtonText}>Đăng nhập để đánh giá và bình luận</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.actionButton, styles.commentButton]}
-            onPress={handleCommentButtonClick}
-          >
-            <Text style={styles.actionButtonText}>Viết bình luận</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <TouchableOpacity
-          style={styles.reviewButton}
-          onPress={() => router.push('/auth')}
-        >
-          <Text style={styles.reviewButtonText}>Đăng nhập để đánh giá và bình luận</Text>
-        </TouchableOpacity>
-      )}
+        )}
 
-      <View style={styles.reviewsList}>
-        {reviews
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-          .filter(review => review.comment && review.comment.trim() !== '')
-          .map((review, index) => (
-            <View key={index} style={styles.reviewItem}>
-              <View style={styles.reviewHeader}>
-                <View style={styles.reviewerInfo}>
-                  <View style={styles.userNameContainer}>
-                    <Text style={styles.userIcon}>👤</Text>
-                    <Text style={styles.reviewerName} numberOfLines={1}>
-                      {review.userName}
-                    </Text>
-                  </View>
-                  <Text style={styles.reviewerEmail} numberOfLines={1}>
-                    {review.isAnonymous ? '' : review.userEmail}
-                  </Text>
-                  <Text style={styles.reviewDate}>
-                    {new Date(review.createdAt).toLocaleDateString('vi-VN')}
-                  </Text>
-                </View>
-                {review.rating > 0 && (
-                  <View style={styles.ratingContainer}>
-                    <Star size={16} color="#FFD700" fill="#FFD700" />
-                    <Text style={styles.ratingText}>{review.rating}/10</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.reviewComment}>
-                💬 {review.comment}
-              </Text>
-            </View>
-          ))}
-      </View>
-
-      {/* Rating Modal */}
-      <Modal
-        visible={showRatingModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowRatingModal(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalContainer} 
-          activeOpacity={1} 
-          onPress={() => setShowRatingModal(false)}
-        >
-          <TouchableOpacity 
-            style={[styles.modalContent, styles.ratingModalContent]}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, styles.ratingModalTitle]}>
-                Chỉnh sửa đánh giá
-              </Text>
-              <TouchableOpacity 
-                onPress={() => setShowRatingModal(false)}
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            
-            <View style={styles.starsContainer}>
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
-                <TouchableOpacity
-                  key={star}
-                  onPress={() => handleStarSelect(star)}
-                >
-                  <Star
-                    size={24}
-                    color="#FFD700"
-                    fill={star <= tempRating ? "#FFD700" : "none"}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={styles.ratingText}>{tempRating}/10</Text>
-
-            <View style={styles.ratingModalButtons}>
-              {rating > 0 && (
-                <TouchableOpacity
-                  style={styles.ratingRemoveButton}
-                  onPress={handleRemoveRating}
-                >
-                  <Text style={styles.ratingButtonText}>Xóa đánh giá</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={[
-                  styles.ratingSendButton,
-                  !rating && { flex: 1 }
-                ]}
-                onPress={handleUpdateRating}
-              >
-                <Text style={styles.ratingButtonText}>Cập nhật</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Comment Modal */}
-      <Modal
-        visible={showCommentModal}
-        transparent={true}
-        animationType="slide"
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Viết bình luận</Text>
-
+        {getCurrentUser() && (
+          <View style={styles.commentInputContainer}>
             <TextInput
               style={styles.commentInput}
               placeholder="Viết bình luận của bạn..."
+              placeholderTextColor="#666"
               multiline
-              numberOfLines={4}
+              numberOfLines={3}
               value={comment}
               onChangeText={setComment}
             />
-
+            
             <TouchableOpacity
               style={styles.anonymousOption}
               onPress={() => setIsAnonymous(!isAnonymous)}
@@ -513,32 +408,140 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
               <Text style={styles.anonymousText}>Bình luận ẩn danh</Text>
             </TouchableOpacity>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowCommentModal(false);
-                  setComment('');
-                  setIsAnonymous(false);
-                }}
-              >
-                <Text style={styles.buttonText}>Hủy</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.submitButton]}
-                onPress={handleSubmitComment}
-              >
-                <Text style={styles.buttonText}>Gửi</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={[styles.submitCommentButton, !comment.trim() && styles.submitCommentButtonDisabled]}
+              onPress={handleSubmitComment}
+              disabled={!comment.trim()}
+            >
+              <Text style={styles.submitCommentButtonText}>Gửi bình luận</Text>
+            </TouchableOpacity>
           </View>
+        )}
+
+        <View style={styles.reviewsList}>
+          {reviews
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .filter(review => review.comment && review.comment.trim() !== '')
+            .slice(0, 3)
+            .map((review, index) => (
+              <View key={index} style={styles.reviewItem}>
+                <View style={styles.reviewHeader}>
+                  <View style={styles.reviewerInfo}>
+                    <View style={styles.userNameContainer}>
+                      <Text style={styles.userIcon}>👤</Text>
+                      <Text style={styles.reviewerName} numberOfLines={1}>
+                        {review.userName}
+                      </Text>
+                    </View>
+                    <Text style={styles.reviewerEmail} numberOfLines={1}>
+                      {review.isAnonymous ? '' : review.userEmail}
+                    </Text>
+                    <Text style={styles.reviewDate}>
+                      {new Date(review.createdAt).toLocaleDateString('vi-VN')}
+                    </Text>
+                  </View>
+                  {review.rating > 0 && (
+                    <View style={styles.ratingContainer}>
+                      <Star size={16} color="#FFD700" fill="#FFD700" />
+                      <Text style={styles.ratingText}>{review.rating}/10</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.reviewComment}>
+                  💬 {review.comment}
+                </Text>
+              </View>
+            ))}
+
+          <TouchableOpacity
+            style={styles.viewAllButton}
+            onPress={handleViewAllComments}
+          >
+            <Text style={styles.viewAllButtonText}>
+              Xem tất cả bình luận ({reviews.filter(review => review.comment && review.comment.trim() !== '').length})
+            </Text>
+          </TouchableOpacity>
         </View>
-      </Modal>
-    </View>
+
+        {/* Rating Modal */}
+        <Modal
+          visible={showRatingModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowRatingModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalContainer} 
+            activeOpacity={1} 
+            onPress={() => setShowRatingModal(false)}
+          >
+            <TouchableOpacity 
+              style={[styles.modalContent, styles.ratingModalContent]}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, styles.ratingModalTitle]}>
+                  Chỉnh sửa đánh giá
+                </Text>
+                <TouchableOpacity 
+                  onPress={() => setShowRatingModal(false)}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.starsContainer}>
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((star) => (
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => handleStarSelect(star)}
+                  >
+                    <Star
+                      size={24}
+                      color="#FFD700"
+                      fill={star <= tempRating ? "#FFD700" : "none"}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+              
+              <Text style={styles.ratingText}>{tempRating}/10</Text>
+
+              <View style={styles.ratingModalButtons}>
+                {rating > 0 && (
+                  <TouchableOpacity
+                    style={styles.ratingRemoveButton}
+                    onPress={handleRemoveRating}
+                  >
+                    <Text style={styles.ratingButtonText}>Xóa đánh giá</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[
+                    styles.ratingSendButton,
+                    !rating && { flex: 1 }
+                  ]}
+                  onPress={handleUpdateRating}
+                >
+                  <Text style={styles.ratingButtonText}>Cập nhật</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1a1a1a',
+    padding: 16,
+  },
   reviewSection: {
     padding: 16,
     backgroundColor: '#1a1a1a',
@@ -568,9 +571,6 @@ const styles = StyleSheet.create({
   },
   ratingButton: {
     backgroundColor: '#FFD700',
-  },
-  commentButton: {
-    backgroundColor: '#4A90E2',
   },
   actionButtonText: {
     color: '#000',
@@ -689,19 +689,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 16,
   },
-  commentInput: {
-    backgroundColor: '#2a2a2a',
-    color: '#fff',
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 16,
-    textAlignVertical: 'top',
-    minHeight: 100,
-  },
   anonymousOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
     gap: 8,
   },
   checkbox: {
@@ -725,28 +715,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontFamily: 'Montserrat-Regular',
     fontSize: 14,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#444',
-  },
-  submitButton: {
-    backgroundColor: '#FFD700',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000',
   },
   ratingModalContent: {
     backgroundColor: '#000000',
@@ -779,5 +747,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#FFFFFF',
+  },
+  viewAllButton: {
+    backgroundColor: '#333',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  viewAllButtonText: {
+    color: '#fff',
+    fontWeight: '500',
+  },
+  commentInputContainer: {
+    marginTop: 16,
+    marginBottom: 16,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 16,
+  },
+  commentInput: {
+    backgroundColor: '#1a1a1a',
+    color: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    textAlignVertical: 'top',
+    minHeight: 80,
+    marginBottom: 12,
+  },
+  submitCommentButton: {
+    backgroundColor: '#FFD700',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  submitCommentButtonDisabled: {
+    backgroundColor: '#444',
+  },
+  submitCommentButtonText: {
+    color: '#000',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 }); 
