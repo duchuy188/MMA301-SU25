@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
 import { Star } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
-import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating } from '../../services/movie';
+import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating, getCurrentRatings } from '../../services/movie';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentUser } from '../../services/auth';
 import Toast from 'react-native-toast-message';
@@ -28,11 +28,15 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
   useEffect(() => {
     const loadSavedRating = async () => {
       try {
-        const savedRating = await AsyncStorage.getItem(`movie_rating_${movieId}`);
-        if (savedRating) {
-          const parsedRating = parseInt(savedRating);
-          setRating(parsedRating);
-          setTempRating(parsedRating);
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          const ratingKey = `movie_rating_${movieId}_${currentUser._id}`;
+          const savedRating = await AsyncStorage.getItem(ratingKey);
+          if (savedRating) {
+            const parsedRating = parseInt(savedRating);
+            setRating(parsedRating);
+            setTempRating(parsedRating);
+          }
         }
       } catch (error) {
         console.error('Error loading saved rating:', error);
@@ -48,13 +52,8 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         const movieReviews = await getMovieReviews(movieId);
         setReviews(movieReviews);
 
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          const userReviewData = await getUserReview(currentUser._id, movieId);
-          if (userReviewData) {
-            setUserReview(userReviewData);
-          }
-        }
+        const avgRating = await getCurrentRatings(movieId);
+        onRatingUpdate(avgRating, movieReviews.length);
       } catch (error) {
         console.error('Error loading reviews:', error);
       }
@@ -129,7 +128,8 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         });
 
         // Save rating to AsyncStorage for persistence
-        await AsyncStorage.setItem(`movie_rating_${movieId}`, tempRating.toString());
+        const ratingKey = `movie_rating_${movieId}_${currentUser._id}`;
+        await AsyncStorage.setItem(ratingKey, tempRating.toString());
       }
     } catch (error) {
       Toast.show({
@@ -175,13 +175,10 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         return;
       }
 
-      const savedRating = await AsyncStorage.getItem(`movie_rating_${movieId}`);
-      const currentRating = savedRating ? parseInt(savedRating) : 0;
-
       const review: MovieReview = {
         userId: currentUser._id,
         movieId: movieId,
-        rating: currentRating,
+        rating: 0, // Rating will be added from current rating in saveMovieReview
         comment: comment.trim(),
         userName: isAnonymous ? 'Ẩn danh' : userData.name,
         userEmail: userData.email,
@@ -193,22 +190,16 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
       if (success) {
         const updatedReviews = await getMovieReviews(movieId);
         setReviews(updatedReviews);
-        setUserReview(review);
         
         setShowCommentModal(false);
         setComment('');
+        setIsAnonymous(false);
         
         Toast.show({
           type: 'success',
           text1: 'Bình luận thành công',
           visibilityTime: 3000,
         });
-
-        if (review.rating === 0) {
-          await AsyncStorage.removeItem(`movie_rating_${movieId}`);
-        } else {
-          await AsyncStorage.setItem(`movie_rating_${movieId}`, review.rating.toString());
-        }
       }
     } catch (error) {
       Toast.show({
@@ -224,15 +215,12 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     const currentUser = getCurrentUser();
     if (!currentUser) return;
 
-    AsyncStorage.getItem(`movie_rating_${movieId}`).then(savedRating => {
-      if (savedRating) {
-        const currentRating = parseInt(savedRating);
-        setTempRating(currentRating);
-        setRating(currentRating);
-      } else {
-        setTempRating(0);
-        setRating(0);
-      }
+    // Only get the current rating from storage, ignore comment ratings
+    const ratingKey = `movie_rating_${movieId}_${currentUser._id}`;
+    AsyncStorage.getItem(ratingKey).then(savedRating => {
+      const currentRating = savedRating ? parseInt(savedRating) : 0;
+      setTempRating(currentRating);
+      setRating(currentRating);
       setIsEditingRating(true);
       setShowRatingModal(true);
     });
@@ -256,40 +244,25 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     }
 
     try {
-      const userJson = await AsyncStorage.getItem('auth_user');
-      const userData = userJson ? JSON.parse(userJson) : null;
-      
-      if (!userData) {
-        Toast.show({
-          type: 'error',
-          text1: 'Không thể lấy thông tin người dùng',
-          text2: 'Vui lòng đăng nhập lại',
-          visibilityTime: 3000,
-        });
-        return;
-      }
-
-      const ratingReview: MovieReview = {
+      const review: MovieReview = {
         userId: currentUser._id,
         movieId: movieId,
         rating: tempRating,
-        comment: '',
-        userName: userData.name,
-        userEmail: userData.email,
+        comment: '', // Empty comment since we're only updating rating
+        userName: '',
+        userEmail: '',
         isAnonymous: false,
         createdAt: new Date().toISOString()
       };
 
-      const success = await saveMovieReview(ratingReview);
+      const success = await saveMovieReview(review);
       if (success) {
-        const allReviews = await getMovieReviews(movieId);
-        const avgRating = calculateAverageRating(allReviews);
-        onRatingUpdate(avgRating, allReviews.filter(r => r.rating > 0).length);
-        
-        await AsyncStorage.setItem(`movie_rating_${movieId}`, tempRating.toString());
         setRating(tempRating);
         setShowRatingModal(false);
         
+        const avgRating = await getCurrentRatings(movieId);
+        onRatingUpdate(avgRating, reviews.length);
+
         Toast.show({
           type: 'success',
           text1: 'Cập nhật đánh giá thành công',
@@ -311,13 +284,11 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     if (!currentUser) return;
 
     try {
-      await AsyncStorage.removeItem(`movie_rating_${movieId}`);
-      
       const review: MovieReview = {
         userId: currentUser._id,
         movieId: movieId,
         rating: 0,
-        comment: '',
+        comment: '', // Empty comment since we're only updating rating
         userName: '',
         userEmail: '',
         isAnonymous: false,
@@ -326,15 +297,12 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
 
       const success = await saveMovieReview(review);
       if (success) {
-        const updatedReviews = await getMovieReviews(movieId);
-        setReviews(updatedReviews);
-        setUserReview(null);
         setRating(0);
         setTempRating(0);
         setShowRatingModal(false);
         
-        const avgRating = calculateAverageRating(updatedReviews);
-        onRatingUpdate(avgRating, updatedReviews.filter(r => r.rating > 0).length);
+        const avgRating = await getCurrentRatings(movieId);
+        onRatingUpdate(avgRating, reviews.length);
 
         Toast.show({
           type: 'success',
@@ -354,14 +322,15 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
 
   const getCurrentRating = async () => {
     try {
-      const savedRating = await AsyncStorage.getItem(`movie_rating_${movieId}`);
-      if (savedRating) {
-        return parseInt(savedRating);
-      }
-      const currentUser = getCurrentUser();
-      if (currentUser) {
+      const user = getCurrentUser();
+      if (user) {
+        const ratingKey = `movie_rating_${movieId}_${user._id}`;
+        const savedRating = await AsyncStorage.getItem(ratingKey);
+        if (savedRating) {
+          return parseInt(savedRating);
+        }
         const userRating = reviews.find(review => 
-          review.userId === currentUser._id && 
+          review.userId === user._id && 
           review.rating > 0
         );
         return userRating ? userRating.rating : 0;
