@@ -472,7 +472,20 @@ export default function PaymentScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity style={styles.backButton} onPress={() => {
+          if (ticketInfo && ticketInfo.bookingId) {
+            router.replace({
+              pathname: '/seat-selection',
+              params: {
+                screeningId: ticketInfo.screeningId,
+                selectedSeats: JSON.stringify(ticketInfo.seats),
+                bookingId: ticketInfo.bookingId,
+              },
+            });
+          } else {
+            router.back();
+          }
+        }}>
           <ArrowLeft size={24} color="#FFD700" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Thanh toán</Text>
@@ -595,27 +608,6 @@ export default function PaymentScreen() {
                   XÁC NHẬN THANH TOÁN
                 </Text>
               )}
-            </TouchableOpacity>
-            {/* Button: Update Booking */}
-            <TouchableOpacity
-              style={[styles.confirmButton, { marginTop: 12, backgroundColor: '#4CAF50' }]}
-              onPress={() => {
-                if (!ticketInfo || !ticketInfo.bookingId) {
-                  Alert.alert('Lỗi', 'Không tìm thấy thông tin đặt vé để cập nhật.');
-                  return;
-                }
-                // Chỉ điều hướng về chọn ghế, không gọi updateBooking ở đây
-                router.replace({
-                  pathname: '/seat-selection',
-                  params: {
-                    screeningId: ticketInfo.screeningId,
-                    selectedSeats: JSON.stringify(ticketInfo.seats),
-                    bookingId: ticketInfo.bookingId,
-                  },
-                });
-              }}
-            >
-              <Text style={styles.confirmButtonText}>CẬP NHẬT VÉ</Text>
             </TouchableOpacity>
             {/* Button: Cancel Booking */}
             <TouchableOpacity

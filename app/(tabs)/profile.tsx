@@ -172,12 +172,21 @@ export default function ProfileScreen() {
               .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
               .slice(0, 3)
               .map((ticket, idx) => (
-                <View key={ticket._id || idx} style={styles.ticketCard}>
+                <TouchableOpacity
+                  key={ticket._id || idx}
+                  style={styles.ticketCard}
+                  onPress={() => router.push({
+                    pathname: '/historyticket',
+                    params: {
+                      booking: JSON.stringify(ticket),
+                    }
+                  })}
+                >
                   <View style={{ flexDirection: 'column', gap: 8 }}>
                     <Text style={styles.movieTitle} numberOfLines={1}>{ticket.movieTitle || 'Không rõ phim'}</Text>
                     <Text style={styles.seatText}>{ticket.screeningTime ? new Date(ticket.screeningTime).toLocaleDateString('vi-VN') : ''}</Text>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))
           )}
         </View>
