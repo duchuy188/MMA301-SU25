@@ -515,8 +515,18 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
 
         {getCurrentUser() && (
           <>
-            {/* Phần chụp và gửi ảnh */}
-            <View style={styles.imageUploadContainer}>
+            {/* Phần bình luận */}
+            <View style={styles.commentInputContainer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Viết bình luận của bạn..."
+                placeholderTextColor="#666"
+                multiline
+                numberOfLines={3}
+                value={comment}
+                onChangeText={setComment}
+              />
+
               {selectedImage ? (
                 <View style={styles.selectedImageContainer}>
                   <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
@@ -536,28 +546,6 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
                   </TouchableOpacity>
                 </View>
               )}
-              
-              {selectedImage && (
-                <TouchableOpacity
-                  style={[styles.submitImageButton, styles.imageUploadButton]}
-                  onPress={handleSubmitComment}
-                >
-                  <Text style={styles.submitImageButtonText}>📸 Gửi ảnh</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Phần bình luận */}
-            <View style={styles.commentInputContainer}>
-              <TextInput
-                style={styles.commentInput}
-                placeholder="Viết bình luận của bạn..."
-                placeholderTextColor="#666"
-                multiline
-                numberOfLines={3}
-                value={comment}
-                onChangeText={setComment}
-              />
 
               <TouchableOpacity
                 style={styles.anonymousOption}
@@ -572,12 +560,14 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
               <TouchableOpacity
                 style={[
                   styles.submitCommentButton,
-                  !comment.trim() && styles.submitCommentButtonDisabled
+                  !comment.trim() && !selectedImage && styles.submitCommentButtonDisabled
                 ]}
                 onPress={handleSubmitComment}
-                disabled={!comment.trim()}
+                disabled={!comment.trim() && !selectedImage}
               >
-                <Text style={styles.submitCommentButtonText}>💬 Gửi bình luận</Text>
+                <Text style={styles.submitCommentButtonText}>
+                  {selectedImage ? '📸 ' : ''}💬 Gửi
+                </Text>
               </TouchableOpacity>
             </View>
           </>
