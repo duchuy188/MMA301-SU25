@@ -16,7 +16,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import { Send, Bot, PlusCircle, Monitor, Ticket, Gift, Film, MapPin } from 'lucide-react-native';
+import { Send, Bot, PlusCircle, Monitor, Ticket, Gift, Film, MapPin, Calendar, Star, Info } from 'lucide-react-native';
 import { getGeminiResponse } from '../../services/gemini';
 import { router } from 'expo-router';
 import { Movie, getPublicMovies } from '../../services/movie';
@@ -60,6 +60,7 @@ const thiso_mall = require('../../assets/images/theater/Thiso Mall.webp');
 type QuickReply = {
   text: string;
   onPress: () => void;
+  icon?: React.ReactNode;
 };
 
 export default function ChatbotScreen() {
@@ -77,12 +78,12 @@ export default function ChatbotScreen() {
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
   // Thay đổi khởi tạo ban đầu
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([
-    { text: 'Phim đang chiếu', onPress: () => handleQuickReply('Phim đang chiếu') },
-    { text: 'Phim sắp chiếu', onPress: () => handleQuickReply('Phim sắp chiếu') },
-    { text: 'Rạp chiếu', onPress: () => handleQuickReply('Rạp Galaxy Cinema') },
-    { text: 'Khuyến mãi', onPress: () => handleQuickReply('Khuyến mãi hiện có') },
-    { text: 'Lịch chiếu', onPress: () => handleQuickReply('Lịch chiếu hôm nay') },
-    { text: 'Tư vấn ghế ngồi', onPress: () => handleQuickReply('Tư vấn chọn ghế tốt nhất') },
+    { text: 'Phim đang chiếu', onPress: () => handleQuickReply('Phim đang chiếu'), icon: <Film size={14} color="#FFD700" /> },
+    { text: 'Phim sắp chiếu', onPress: () => handleQuickReply('Phim sắp chiếu'), icon: <Calendar size={14} color="#FFD700" /> },
+    { text: 'Rạp chiếu', onPress: () => handleQuickReply('Rạp Galaxy Cinema'), icon: <MapPin size={14} color="#FFD700" /> },
+    { text: 'Khuyến mãi', onPress: () => handleQuickReply('Khuyến mãi hiện có'), icon: <Gift size={14} color="#FFD700" /> },
+    { text: 'Lịch chiếu', onPress: () => handleQuickReply('Lịch chiếu hôm nay'), icon: <Calendar size={14} color="#FFD700" /> },
+    { text: 'Tư vấn ghế', onPress: () => handleQuickReply('Tư vấn chọn ghế tốt nhất'), icon: <Info size={14} color="#FFD700" /> },
   ]);
   
   // Hiệu ứng fade in cho header
@@ -103,16 +104,17 @@ export default function ChatbotScreen() {
     }
   }, [messages]);
 
-  // Thay thế toàn bộ useEffect cập nhật quick replies
+  // Xóa hoàn toàn useEffect này vì bạn đã khởi tạo quickReplies với icon ở trên
+  // HOẶC sửa thành:
   useEffect(() => {
     // Thêm tùy chọn "Tư vấn ghế ngồi" vào danh sách quick replies
     setQuickReplies([
-      { text: 'Phim đang chiếu', onPress: () => handleQuickReply('Phim đang chiếu') },
-      { text: 'Phim sắp chiếu', onPress: () => handleQuickReply('Phim sắp chiếu') },
-      { text: 'Rạp chiếu', onPress: () => handleQuickReply('Rạp Galaxy Cinema') },
-      { text: 'Khuyến mãi', onPress: () => handleQuickReply('Khuyến mãi hiện có') },
-      { text: 'Lịch chiếu', onPress: () => handleQuickReply('Lịch chiếu hôm nay') },
-      { text: 'Tư vấn ghế ngồi', onPress: () => handleQuickReply('Tư vấn chọn ghế tốt nhất') },
+      { text: 'Phim đang chiếu', onPress: () => handleQuickReply('Phim đang chiếu'), icon: <Film size={14} color="#FFD700" /> },
+      { text: 'Phim sắp chiếu', onPress: () => handleQuickReply('Phim sắp chiếu'), icon: <Calendar size={14} color="#FFD700" /> },
+      { text: 'Rạp chiếu', onPress: () => handleQuickReply('Rạp Galaxy Cinema'), icon: <MapPin size={14} color="#FFD700" /> },
+      { text: 'Khuyến mãi', onPress: () => handleQuickReply('Khuyến mãi hiện có'), icon: <Gift size={14} color="#FFD700" /> },
+      { text: 'Lịch chiếu', onPress: () => handleQuickReply('Lịch chiếu hôm nay'), icon: <Calendar size={14} color="#FFD700" /> },
+      { text: 'Tư vấn ghế', onPress: () => handleQuickReply('Tư vấn chọn ghế tốt nhất'), icon: <Info size={14} color="#FFD700" /> },
     ]);
   }, []); // Chỉ chạy một lần khi component mount
 
@@ -993,32 +995,50 @@ export default function ChatbotScreen() {
     handleSend();
   };
 
-  // Thêm component QuickReplies
-  const QuickReplies = () => (
-    <View style={styles.quickRepliesContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {quickReplies.map((reply, index) => (
-          <TouchableOpacity
-            key={index}
-        style={[
-              styles.quickReplyButton,
-              // Thêm hiệu ứng nhấp nháy nhẹ cho nút đầu tiên
-              index === 0 && {
-                shadowColor: "#FFD700",
-                shadowOffset: { width: 0, height: 0 },
-                shadowOpacity: 0.5,
-                shadowRadius: 5,
-                elevation: 5
-              }
-            ]}
-            onPress={reply.onPress}
-          >
-            <Text style={styles.quickReplyText}>{reply.text}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+  // Thay thế component QuickReplies hiện tại bằng phiên bản mới
+  const QuickReplies = () => {
+    // Chia mảng quickReplies thành 2 hàng
+    const firstRow = quickReplies.slice(0, 3);
+    const secondRow = quickReplies.slice(3);
+
+    return (
+      <View style={styles.quickRepliesContainer}>
+        <View style={styles.quickRepliesRow}>
+          {firstRow.map((reply, index) => (
+            <TouchableOpacity
+              key={index}
+              style={[
+                styles.quickReplyButton,
+                index === 0 && {
+                  shadowColor: "#FFD700",
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.5,
+                  shadowRadius: 5,
+                  elevation: 5
+                }
+              ]}
+              onPress={reply.onPress}
+            >
+              {reply.icon}
+              <Text style={styles.quickReplyText}>{reply.text}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.quickRepliesRow}>
+          {secondRow.map((reply, index) => (
+            <TouchableOpacity
+              key={index + 3}
+              style={styles.quickReplyButton}
+              onPress={reply.onPress}
+            >
+              {reply.icon}
+              <Text style={styles.quickReplyText}>{reply.text}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1563,26 +1583,36 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   quickRepliesContainer: {
-    flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingVertical: 10, // Tăng padding
+    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: '#333',
-    backgroundColor: '#0A0A0A', // Tối hơn một chút để tạo độ tương phản
+    backgroundColor: '#0A0A0A',
+  },
+  quickRepliesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   quickReplyButton: {
     backgroundColor: '#1A1A1A',
-    paddingHorizontal: 16,
-    paddingVertical: 10, // Tăng kích thước nút
+    paddingHorizontal: 8,  // giảm padding ngang
+    paddingVertical: 6,    // giảm padding dọc
     borderRadius: 20,
-    marginRight: 10,
     borderWidth: 1,
     borderColor: '#FFD700',
+    flex: 1,
+    marginHorizontal: 3,   // giảm margin
+    alignItems: 'center',
+    flexDirection: 'row',  // thêm để icon và text nằm cùng hàng
+    justifyContent: 'center',
   },
   quickReplyText: {
     color: '#FFD700',
-    fontSize: 14,
+    fontSize: 11,          // giảm kích thước font
     fontFamily: 'Montserrat-Medium',
+    textAlign: 'center',
+    marginLeft: 4,         // tạo khoảng cách giữa icon và text
   },
   screeningPreview: {
     flexDirection: 'column',
