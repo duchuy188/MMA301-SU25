@@ -74,9 +74,9 @@ export const validatePromotionCode = async (
 ): Promise<PromotionValidationResponse> => {
     try {
         await loadAuthTokens();
-        
-        const response = await api.post('/api/promotions/validate', { code });
-        
+
+        const response = await api.post('/promotions/validate', { code });
+
         return response.data;
     } catch (error: any) {
         if (error.response?.status === 401) {
