@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { Star, Camera, Image as ImageIcon } from 'lucide-react-native';
 import { useState, useEffect } from 'react';
 import { MovieReview, saveMovieReview, getMovieReviews, getUserReview, calculateAverageRating, getCurrentRatings, getAllUserRatings } from '../../services/movie';
@@ -28,6 +28,8 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
   const [ratingDistribution, setRatingDistribution] = useState<{ [key: number]: number }>({});
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [reviewImages, setReviewImages] = useState<{[key: string]: string}>({});
+  const [isLoadingImages, setIsLoadingImages] = useState(true);
+  const [selectedFullImage, setSelectedFullImage] = useState<string | null>(null);
 
   // Load saved rating from AsyncStorage when component mounts
   useEffect(() => {
@@ -77,16 +79,22 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
   // Load images from AsyncStorage
   useEffect(() => {
     const loadImages = async () => {
+      setIsLoadingImages(true);
       const loadedImages: {[key: string]: string} = {};
       for (const review of reviews) {
         if (review.imageUrl?.startsWith('review_image_')) {
-          const uri = await AsyncStorage.getItem(review.imageUrl);
-          if (uri) {
-            loadedImages[review.imageUrl] = uri;
+          try {
+            const uri = await AsyncStorage.getItem(review.imageUrl);
+            if (uri) {
+              loadedImages[review.imageUrl] = uri;
+            }
+          } catch (error) {
+            console.error('Error loading image:', error);
           }
         }
       }
       setReviewImages(loadedImages);
+      setIsLoadingImages(false);
     };
     loadImages();
   }, [reviews]);
@@ -477,6 +485,10 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
     setSelectedImage(null);
   };
 
+  const handleImagePress = (imageUri: string) => {
+    setSelectedFullImage(imageUri);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.reviewSection}>
@@ -502,80 +514,90 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
         )}
 
         {getCurrentUser() && (
-          <View style={styles.commentInputContainer}>
-            <TextInput
-              style={styles.commentInput}
-              placeholder="Viết bình luận của bạn..."
-              placeholderTextColor="#666"
-              multiline
-              numberOfLines={3}
-              value={comment}
-              onChangeText={setComment}
-            />
-
-            {selectedImage && (
-              <View style={styles.selectedImageContainer}>
-                <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
-                <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
-                  <Text style={styles.removeImageText}>✕</Text>
+          <>
+            {/* Phần chụp và gửi ảnh */}
+            <View style={styles.imageUploadContainer}>
+              {selectedImage ? (
+                <View style={styles.selectedImageContainer}>
+                  <Image source={{ uri: selectedImage }} style={styles.selectedImage} />
+                  <TouchableOpacity style={styles.removeImageButton} onPress={removeImage}>
+                    <Text style={styles.removeImageText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.imageButtons}>
+                  <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
+                    <Camera size={20} color="#FFD700" />
+                    <Text style={styles.imageButtonText}>Chụp ảnh</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+                    <ImageIcon size={20} color="#FFD700" />
+                    <Text style={styles.imageButtonText}>Chọn ảnh</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {selectedImage && (
+                <TouchableOpacity
+                  style={[styles.submitImageButton, styles.imageUploadButton]}
+                  onPress={handleSubmitComment}
+                >
+                  <Text style={styles.submitImageButtonText}>📸 Gửi ảnh</Text>
                 </TouchableOpacity>
-              </View>
-            )}
+              )}
+            </View>
 
-            <View style={styles.imageButtons}>
-              <TouchableOpacity style={styles.imageButton} onPress={takePhoto}>
-                <Camera size={20} color="#FFD700" />
-                <Text style={styles.imageButtonText}>Chụp ảnh</Text>
+            {/* Phần bình luận */}
+            <View style={styles.commentInputContainer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Viết bình luận của bạn..."
+                placeholderTextColor="#666"
+                multiline
+                numberOfLines={3}
+                value={comment}
+                onChangeText={setComment}
+              />
+
+              <TouchableOpacity
+                style={styles.anonymousOption}
+                onPress={() => setIsAnonymous(!isAnonymous)}
+              >
+                <View style={[styles.checkbox, isAnonymous && styles.checkboxChecked]}>
+                  {isAnonymous && <Text style={styles.checkmark}>✓</Text>}
+                </View>
+                <Text style={styles.anonymousText}>Bình luận ẩn danh</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
-                <ImageIcon size={20} color="#FFD700" />
-                <Text style={styles.imageButtonText}>Chọn ảnh</Text>
+
+              <TouchableOpacity
+                style={[
+                  styles.submitCommentButton,
+                  !comment.trim() && styles.submitCommentButtonDisabled
+                ]}
+                onPress={handleSubmitComment}
+                disabled={!comment.trim()}
+              >
+                <Text style={styles.submitCommentButtonText}>💬 Gửi bình luận</Text>
               </TouchableOpacity>
             </View>
-            
-            <TouchableOpacity
-              style={styles.anonymousOption}
-              onPress={() => setIsAnonymous(!isAnonymous)}
-            >
-              <View style={[styles.checkbox, isAnonymous && styles.checkboxChecked]}>
-                {isAnonymous && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.anonymousText}>Bình luận ẩn danh</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.submitCommentButton,
-                (!comment.trim() && !selectedImage) && styles.submitCommentButtonDisabled
-              ]}
-              onPress={handleSubmitComment}
-              disabled={!comment.trim() && !selectedImage}
-            >
-              <Text style={styles.submitCommentButtonText}>
-                {selectedImage ? 'Gửi' : 'Gửi bình luận'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          </>
         )}
 
         <View style={styles.reviewsList}>
           {reviews
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-            .filter(review => review.comment && review.comment.trim() !== '')
+            .filter(review => review.comment || review.imageUrl) // Sửa điều kiện lọc để hiển thị cả review chỉ có ảnh
             .slice(0, 3)
             .map((review, index) => (
               <View key={index} style={styles.reviewItem}>
                 <View style={styles.reviewHeader}>
                   <View style={styles.reviewerInfo}>
-                    <View style={styles.userNameContainer}>
+                    <View style={styles.userInfoRow}>
                       <Text style={styles.userIcon}>👤</Text>
-                      <Text style={styles.reviewerName} numberOfLines={1}>
-                        {review.userName}
+                      <Text style={styles.reviewerEmail} numberOfLines={1}>
+                        {review.isAnonymous ? '' : review.userEmail}
                       </Text>
                     </View>
-                    <Text style={styles.reviewerEmail} numberOfLines={1}>
-                      {review.isAnonymous ? '' : review.userEmail}
-                    </Text>
                     <Text style={styles.reviewDate}>
                       {new Date(review.createdAt).toLocaleDateString('vi-VN')}
                     </Text>
@@ -587,19 +609,27 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
                     </View>
                   )}
                 </View>
-                <Text style={styles.reviewComment}>
-                  💬 {review.comment}
-                </Text>
-                {review.imageUrl && (
-                  <Image 
-                    source={{ 
-                      uri: review.imageUrl.startsWith('review_image_')
-                        ? reviewImages[review.imageUrl] || ''
-                        : review.imageUrl
-                    }} 
-                    style={styles.reviewImage}
-                    resizeMode="cover"
-                  />
+                {review.comment && review.comment !== '📸' && (
+                  <Text style={styles.reviewComment}>
+                    💬 {review.comment}
+                  </Text>
+                )}
+                {review.imageUrl && reviewImages[review.imageUrl!] && (
+                  isLoadingImages ? (
+                    <View style={styles.reviewImage}>
+                      <ActivityIndicator color="#FFD700" />
+                    </View>
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => handleImagePress(reviewImages[review.imageUrl!])}
+                    >
+                      <Image
+                        source={{ uri: reviewImages[review.imageUrl!] }}
+                        style={styles.reviewImage}
+                        resizeMode="cover"
+                      />
+                    </TouchableOpacity>
+                  )
                 )}
               </View>
             ))}
@@ -609,7 +639,7 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
             onPress={handleViewAllComments}
           >
             <Text style={styles.viewAllButtonText}>
-              Xem tất cả bình luận ({reviews.filter(review => review.comment && review.comment.trim() !== '').length})
+              Xem tất cả bình luận ({reviews.filter(review => review.comment || review.imageUrl).length})
             </Text>
           </TouchableOpacity>
         </View>
@@ -680,6 +710,26 @@ export default function MovieReviewComponent({ movieId, onRatingUpdate }: MovieR
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Full Image Modal */}
+        <Modal
+          visible={!!selectedFullImage}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setSelectedFullImage(null)}
+        >
+          <TouchableOpacity 
+            style={styles.fullImageModalContainer} 
+            activeOpacity={1} 
+            onPress={() => setSelectedFullImage(null)}
+          >
+            <Image
+              source={{ uri: selectedFullImage || '' }}
+              style={styles.fullImage}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         </Modal>
       </View>
@@ -780,26 +830,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 4,
   },
-  userNameContainer: {
+  userInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    maxWidth: '80%',
   },
   userIcon: {
     fontSize: 16,
   },
-  reviewerName: {
-    color: '#FFD700',
-    fontFamily: 'Montserrat-SemiBold',
-    fontSize: 14,
-    flex: 1,
-  },
   reviewerEmail: {
     color: '#888',
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Montserrat-Regular',
-    marginBottom: 2,
   },
   reviewDate: {
     color: '#888',
@@ -962,6 +1004,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
+  submitImageButton: {
+    backgroundColor: '#4CAF50', // Màu xanh lá cho nút gửi ảnh
+  },
+  submitImageButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
   ratingDistribution: {
     backgroundColor: '#2a2a2a',
     padding: 16,
@@ -1064,5 +1114,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 12,
     alignSelf: 'flex-start', // Căn lề trái
+  },
+  fullImageModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: '100%',
+    height: '80%',
+  },
+  imageUploadContainer: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  imageUploadButton: {
+    marginTop: 12,
   },
 }); 

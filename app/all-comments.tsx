@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Image } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Image, Modal } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import { MovieReview, getMovieReviews, saveMovieReview } from '../services/movie';
 import { getCurrentUser } from '../services/auth';
@@ -17,6 +17,8 @@ export default function AllComments() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [reviewImages, setReviewImages] = useState<{[key: string]: string}>({});
   const [filterType, setFilterType] = useState<'all' | 'images' | 'comments'>('all');
+  const [modalVisible, setModalVisible] = useState(false);
+  const [selectedFullImage, setSelectedFullImage] = useState<string | null>(null);
 
   useEffect(() => {
     loadReviews();
@@ -162,77 +164,107 @@ export default function AllComments() {
     })
     .filter(review => selectedRating === null || review.rating === selectedRating);
 
-  const renderContentFilter = () => {
+  const renderFilters = () => {
     return (
       <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
-          onPress={() => setFilterType('all')}
-        >
-          <Text style={[styles.filterText, filterType === 'all' && styles.filterTextActive]}>
-            Tất cả
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'images' && styles.filterButtonActive]}
-          onPress={() => setFilterType('images')}
-        >
-          <View style={styles.filterButtonContent}>
-            <ImageIcon size={16} color={filterType === 'images' ? '#000' : '#fff'} />
-            <Text style={[styles.filterText, filterType === 'images' && styles.filterTextActive]}>
-              Có hình ảnh
+        {/* Content type filters */}
+        <View style={styles.filterGroup}>
+          <TouchableOpacity
+            style={[styles.filterButton, filterType === 'all' && styles.filterButtonActive]}
+            onPress={() => setFilterType('all')}
+          >
+            <Text style={[styles.filterText, filterType === 'all' && styles.filterTextActive]}>
+              Tất cả
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, filterType === 'images' && styles.filterButtonActive]}
+            onPress={() => setFilterType('images')}
+          >
+            <View style={styles.filterButtonContent}>
+              <ImageIcon size={16} color={filterType === 'images' ? '#000' : '#fff'} />
+              <Text style={[styles.filterText, filterType === 'images' && styles.filterTextActive]}>
+                Có hình ảnh
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, filterType === 'comments' && styles.filterButtonActive]}
+            onPress={() => setFilterType('comments')}
+          >
+            <View style={styles.filterButtonContent}>
+              <MessageSquare size={16} color={filterType === 'comments' ? '#000' : '#fff'} />
+              <Text style={[styles.filterText, filterType === 'comments' && styles.filterTextActive]}>
+                Có bình luận
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Rating filters */}
+        <View style={styles.ratingContainer}>
+          <View style={styles.ratingRow}>
+            {[1, 2, 3, 4, 5].map((rating) => (
+              <TouchableOpacity
+                key={rating}
+                style={[styles.filterButton, selectedRating === rating && styles.filterButtonActive]}
+                onPress={() => setSelectedRating(rating)}
+              >
+                <Text style={[styles.filterText, selectedRating === rating && styles.filterTextActive]}>
+                  {rating}⭐
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.filterButton, filterType === 'comments' && styles.filterButtonActive]}
-          onPress={() => setFilterType('comments')}
-        >
-          <View style={styles.filterButtonContent}>
-            <MessageSquare size={16} color={filterType === 'comments' ? '#000' : '#fff'} />
-            <Text style={[styles.filterText, filterType === 'comments' && styles.filterTextActive]}>
-              Có bình luận
-            </Text>
+          <View style={styles.ratingRow}>
+            {[6, 7, 8, 9, 10].map((rating) => (
+              <TouchableOpacity
+                key={rating}
+                style={[styles.filterButton, selectedRating === rating && styles.filterButtonActive]}
+                onPress={() => setSelectedRating(rating)}
+              >
+                <Text style={[styles.filterText, selectedRating === rating && styles.filterTextActive]}>
+                  {rating}⭐
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
-        </TouchableOpacity>
+        </View>
       </View>
     );
   };
 
-  const renderStarFilter = () => {
-    return (
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[styles.filterButton, selectedRating === null && styles.filterButtonActive]}
-          onPress={() => setSelectedRating(null)}
-        >
-          <Text style={[styles.filterText, selectedRating === null && styles.filterTextActive]}>
-            Tất cả
-          </Text>
-        </TouchableOpacity>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rating) => (
-          <TouchableOpacity
-            key={rating}
-            style={[styles.filterButton, selectedRating === rating && styles.filterButtonActive]}
-            onPress={() => setSelectedRating(rating)}
-          >
-            <Text style={[styles.filterText, selectedRating === rating && styles.filterTextActive]}>
-              {rating}⭐
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
+  const openFullImage = (imageUri: string) => {
+    setSelectedFullImage(imageUri);
+    setModalVisible(true);
   };
 
   return (
     <View style={styles.container}>
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setModalVisible(false)}
+        >
+          <Image
+            source={{ uri: selectedFullImage || '' }}
+            style={styles.fullImage}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+      </Modal>
+
       <View style={styles.header}>
         <Text style={styles.title}>Tất cả bình luận</Text>
       </View>
 
-      {renderContentFilter()}
-      {renderStarFilter()}
+      {renderFilters()}
 
       <ScrollView style={styles.reviewsList}>
         {filteredReviews.map((review, index) => (
@@ -264,12 +296,14 @@ export default function AllComments() {
                 {review.comment}
               </Text>
             )}
-            {review.imageUrl && reviewImages[review.imageUrl] && (
-              <Image
-                source={{ uri: reviewImages[review.imageUrl] }}
-                style={styles.reviewImage}
-                resizeMode="cover"
-              />
+            {review.imageUrl && reviewImages[review.imageUrl!] && (
+              <TouchableOpacity onPress={() => openFullImage(reviewImages[review.imageUrl!])}>
+                <Image
+                  source={{ uri: reviewImages[review.imageUrl!] }}
+                  style={styles.reviewImage}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
             )}
           </View>
         ))}
@@ -297,12 +331,24 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   filterContainer: {
-    flexDirection: 'row',
-    padding: 12,
-    gap: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    gap: 12,
+  },
+  filterGroup: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    gap: 8,
     flexWrap: 'wrap',
+  },
+  ratingScroll: {
+    flexGrow: 0,
+  },
+  ratingScrollContent: {
+    paddingHorizontal: 12,
+    gap: 8,
+    flexDirection: 'row',
   },
   filterButton: {
     paddingHorizontal: 12,
@@ -371,9 +417,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   ratingContainer: {
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  ratingRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    gap: 8,
+    justifyContent: 'space-between',
   },
   ratingText: {
     color: '#FFD700',
@@ -386,9 +436,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   reviewImage: {
-    width: '100%',
-    height: 200,
+    width: 80,
+    height: 80,
     borderRadius: 8,
     marginTop: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullImage: {
+    width: '100%',
+    height: '80%',
   },
 }); 
