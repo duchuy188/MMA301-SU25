@@ -524,6 +524,7 @@ export default function HomeScreen() {
                 <View style={styles.movieMetaSmall}>
                   <Star size={12} color="#FFD700" fill="#FFD700" />
                   <Text style={styles.ratingSmall}>{movie.rating ? movie.rating.toFixed(1) : '7.5'}/10</Text>
+                  <Text style={styles.voteCount}>({movie.votes || 0})</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -935,6 +936,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Medium',
     fontSize: 12,
     color: '#FFD700',
+  },
+  voteCount: {
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
   },
   noResultsContainer: {
     width: '100%',

@@ -41,6 +41,7 @@ export interface MovieReview {
     userName: string;
     userEmail: string; // Thêm trường email
     isAnonymous: boolean; // Thêm trường để đánh dấu review ẩn danh
+    imageUrl?: string; // Optional image URL field
     createdAt: string;
 }
 
@@ -110,29 +111,55 @@ export const saveMovieReview = async (review: MovieReview) => {
         const existingReviewsStr = await AsyncStorage.getItem(storageKey);
         let reviews: MovieReview[] = existingReviewsStr ? JSON.parse(existingReviewsStr) : [];
         
-        // Remove existing review from this user if exists
-        reviews = reviews.filter(r => r.userId !== review.userId);
-        
-        // Only add the review if it has a rating > 0
-        if (review.rating > 0) {
+        if (review.comment && review.comment.trim() !== '') {
+            // If this is a comment, add it as a new review with current rating
+            const ratingKey = `movie_rating_${review.movieId}_${review.userId}`;
+            const currentRating = await AsyncStorage.getItem(ratingKey);
+            
+            // Add new review with current rating
             reviews.push({
                 ...review,
-                userName: userData?.name || review.userName
+                rating: currentRating ? parseInt(currentRating) : 0,
+                userName: userData?.name || review.userName,
+                createdAt: new Date().toISOString()
             });
+            
+            // Save reviews back to AsyncStorage
+            await AsyncStorage.setItem(storageKey, JSON.stringify(reviews));
+        } else {
+            // This is just a rating update - don't modify reviews
+            const ratingKey = `movie_rating_${review.movieId}_${review.userId}`;
+            if (review.rating > 0) {
+                await AsyncStorage.setItem(ratingKey, review.rating.toString());
+            } else {
+                await AsyncStorage.removeItem(ratingKey);
+            }
         }
-        
-        // Save back to AsyncStorage
-        await AsyncStorage.setItem(storageKey, JSON.stringify(reviews));
 
         // Update movie rating in cache if exists
         if (cachedMovies) {
             const movieIndex = cachedMovies.findIndex(m => m._id === review.movieId);
             if (movieIndex !== -1) {
-                const avgRating = calculateAverageRating(reviews);
+                // Get all current ratings
+                const allKeys = await AsyncStorage.getAllKeys();
+                const ratingKeys = allKeys.filter(key => key.startsWith(`movie_rating_${review.movieId}_`));
+                const currentRatings = await Promise.all(
+                    ratingKeys.map(async key => {
+                        const rating = await AsyncStorage.getItem(key);
+                        return rating ? parseInt(rating) : 0;
+                    })
+                );
+                
+                // Calculate average from current ratings only
+                const validRatings = currentRatings.filter(r => r > 0);
+                const avgRating = validRatings.length > 0 
+                    ? Number((validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1))
+                    : 0;
+
                 cachedMovies[movieIndex] = {
                     ...cachedMovies[movieIndex],
                     rating: avgRating,
-                    votes: reviews.length // Now this only includes reviews with rating > 0
+                    votes: validRatings.length
                 };
             }
         }
@@ -141,6 +168,79 @@ export const saveMovieReview = async (review: MovieReview) => {
     } catch (error) {
         console.error('Error saving movie review:', error);
         return false;
+    }
+};
+
+// Function to get all current ratings (not from reviews)
+export const getCurrentRatings = async (movieId: string): Promise<number> => {
+    try {
+        const allKeys = await AsyncStorage.getAllKeys();
+        const ratingKeys = allKeys.filter(key => key.startsWith(`movie_rating_${movieId}_`));
+        const ratings = await Promise.all(
+            ratingKeys.map(async key => {
+                const rating = await AsyncStorage.getItem(key);
+                return rating ? parseInt(rating) : 0;
+            })
+        );
+        
+        const validRatings = ratings.filter(r => r > 0);
+        return validRatings.length > 0 
+            ? Number((validRatings.reduce((a, b) => a + b, 0) / validRatings.length).toFixed(1))
+            : 0;
+    } catch (error) {
+        console.error('Error getting current ratings:', error);
+        return 0;
+    }
+};
+
+// Function to get all ratings including current ratings and review ratings
+export const getAllUserRatings = async (movieId: string): Promise<MovieReview[]> => {
+    try {
+        // Get all reviews
+        const storageKey = getReviewsStorageKey(movieId);
+        const reviewsStr = await AsyncStorage.getItem(storageKey);
+        const reviews: MovieReview[] = reviewsStr ? JSON.parse(reviewsStr) : [];
+        
+        // Get all current ratings
+        const allKeys = await AsyncStorage.getAllKeys();
+        const ratingKeys = allKeys.filter(key => key.startsWith(`movie_rating_${movieId}_`));
+        
+        // Get all current ratings that don't have a recent review
+        const currentRatings = await Promise.all(
+            ratingKeys.map(async key => {
+                const rating = await AsyncStorage.getItem(key);
+                if (rating) {
+                    const userId = key.split('_').pop() || '';
+                    
+                    // Check if user has a review in the last hour
+                    const recentReview = reviews.find(r => 
+                        r.userId === userId && 
+                        (new Date().getTime() - new Date(r.createdAt).getTime()) < 3600000
+                    );
+                    
+                    // Only include current rating if no recent review
+                    if (!recentReview) {
+                        return {
+                            userId,
+                            movieId,
+                            rating: parseInt(rating),
+                            comment: '',
+                            userName: '',
+                            userEmail: '',
+                            isAnonymous: false,
+                            createdAt: new Date().toISOString()
+                        };
+                    }
+                }
+                return null;
+            })
+        );
+
+        // Combine reviews and current ratings, filtering out null values
+        return [...reviews, ...currentRatings.filter((r): r is MovieReview => r !== null)];
+    } catch (error) {
+        console.error('Error getting all ratings:', error);
+        return [];
     }
 };
 
