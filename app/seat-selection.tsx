@@ -227,6 +227,10 @@ export default function SeatSelectionScreen() {
     if (selectedSeats.includes(seatId)) {
       setSelectedSeats(selectedSeats.filter(seat => seat !== seatId));
     } else {
+      if (selectedSeats.length >= 4) {
+        Alert.alert('Thông báo', 'Bạn chỉ có thể đặt tối đa 4 ghế trong một lần đặt.');
+        return;
+      }
       setSelectedSeats([...selectedSeats, seatId]);
     }
   };

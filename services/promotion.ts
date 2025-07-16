@@ -56,7 +56,19 @@ export const getPromotionById = async (id: string): Promise<ApiResponse<Promotio
     try {
         await loadAuthTokens();
         
-        const response = await api.get(`/promotions/${id}`);
+        // Kiểm tra xem id có phải là mã khuyến mãi (code) không
+        // Nếu id không phải là ObjectId hợp lệ (24 ký tự hex), thì coi như nó là code
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+        
+        let response;
+        if (isObjectId) {
+            // Nếu là ObjectId, gọi API theo ID
+            response = await api.get(`/promotions/${id}`);
+        } else {
+            // Nếu không phải ObjectId, tìm theo code
+            response = await api.get(`/promotions/code/${id}`);
+        }
+        
         return response.data;
     } catch (error: any) {
         if (error.response?.status === 401) {
@@ -91,7 +103,10 @@ export const validatePromotionCode = async (
 // Get active promotions for public use
 export const getActivePromotions = async (): Promise<ApiResponse<Promotion[]>> => {
     try {
-        const response = await api.get('/promotions/active');
+        // Thay đổi endpoint từ /promotions/active thành
+        const response = await api.get('/promotions?isActive=true');
+        // hoặc
+        // const response = await api.get('/promotions/public'); // nếu có endpoint này
         return response.data;
     } catch (error: any) {
         throw new Error(error.response?.data?.message || 'Không thể lấy danh sách khuyến mãi');

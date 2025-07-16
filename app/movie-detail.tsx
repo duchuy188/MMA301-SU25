@@ -62,6 +62,21 @@ export default function MovieDetailScreen() {
     const match = url.match(regExp);
     return match && match[2].length === 11 ? match[2] : null;
   };
+  
+  // Hàm định dạng ngày tháng từ ISO sang DD/MM/YYYY
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    
+    // Cắt bỏ phần thời gian (giữ lại chỉ phần ngày)
+    const date = new Date(dateString);
+    
+    // Định dạng theo DD/MM/YYYY
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  };
 
   if (loading) {
     return (
@@ -143,6 +158,18 @@ export default function MovieDetailScreen() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Diễn viên:</Text>
             <Text style={styles.detailValue}>{movie.actors?.join(', ')}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Ngày ra mắt:</Text>
+            <Text style={styles.detailValue}>{formatDate(movie.releaseDate)}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Quốc gia:</Text>
+            <Text style={styles.detailValue}>{movie.country}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Nhà sản xuất:</Text>
+            <Text style={styles.detailValue}>{movie.producer}</Text>
           </View>
         </View>
 
