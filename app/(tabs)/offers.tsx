@@ -1,25 +1,35 @@
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, RefreshControl } from 'react-native';
 import { Gift, Percent, Star, Copy } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getAllPromotions, Promotion } from '../../services/promotion';
 import { Alert, Clipboard } from 'react-native';
 import { loadAuthTokens, getCurrentUser } from '../../services/auth';
 import { router } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function OffersScreen() {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  useEffect(() => {
-    checkAuthAndFetchData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      checkAuthAndFetchData();
+    }, [])
+  );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await checkAuthAndFetchData();
+    setRefreshing(false);
+  };
 
   const checkAuthAndFetchData = async () => {
     try {
       const authLoaded = await loadAuthTokens();
       setIsAuthenticated(authLoaded);
-      
+
       if (authLoaded) {
         fetchPromotions();
       } else {
@@ -43,11 +53,11 @@ export default function OffersScreen() {
     try {
       setLoading(true);
       const result = await getAllPromotions('approved');
-      
+
       if (result.success && result.data) {
         // Lọc ra các mã giảm giá chưa hết hạn
         const currentDate = new Date();
-        const validPromotions = result.data.filter(promotion => 
+        const validPromotions = result.data.filter(promotion =>
           new Date(promotion.endDate) >= currentDate
         );
         setPromotions(validPromotions);
@@ -98,7 +108,17 @@ export default function OffersScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#FFD700"
+          colors={["#FFD700"]}
+        />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Ưu đãi</Text>
         <Text style={styles.subtitle}>Khuyến mãi và quà tặng hấp dẫn</Text>
@@ -114,11 +134,11 @@ export default function OffersScreen() {
             promotions.map((promotion) => (
               <TouchableOpacity key={promotion._id} style={styles.offerCard}>
                 <View style={styles.offerImageContainer}>
-                  <Image 
-                    source={{ 
+                  <Image
+                    source={{
                       uri: promotion.posterUrl || 'https://images.pexels.com/photos/7991579/pexels-photo-7991579.jpeg?auto=compress&cs=tinysrgb&w=400&h=200'
-                    }} 
-                    style={styles.offerImage} 
+                    }}
+                    style={styles.offerImage}
                   />
                   <View style={styles.discountBadge}>
                     {getOfferIcon(promotion.type)}
@@ -127,24 +147,24 @@ export default function OffersScreen() {
                     </Text>
                   </View>
                 </View>
-                
+
                 <View style={styles.offerContent}>
                   <Text style={styles.offerTitle}>{promotion.name}</Text>
                   <Text style={styles.offerDescription}>{promotion.description}</Text>
-                  
+
                   <View style={styles.codeContainer}>
                     <View style={styles.codeWrapper}>
                       <Text style={styles.codeLabel}>Mã:</Text>
                       <Text style={styles.codeText}>{promotion.code}</Text>
                     </View>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.copyButton}
                       onPress={() => copyPromotionCode(promotion.code)}
                     >
                       <Copy size={18} color="#FFD700" />
                     </TouchableOpacity>
                   </View>
-                  
+
                   <View style={styles.dateContainer}>
                     <View style={styles.dateItem}>
                       <Text style={styles.dateLabel}>Hiệu lực từ:</Text>
