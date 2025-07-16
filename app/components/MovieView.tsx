@@ -51,7 +51,7 @@ export default function MovieView({ movie, onBack }: MovieViewProps) {
           <View style={styles.metaItem}>
             <Star size={16} color="#FFD700" />
             <Text style={styles.rating}>{movie.rating ? movie.rating.toFixed(1) : '7.5'}</Text>
-            <Text style={styles.voteCount}>({movie.votes || 0} đánh giá)</Text>
+            <Text style={styles.voteCount}>({movie.votes || 0})</Text>
           </View>
           <View style={styles.metaItem}>
             <Clock size={16} color="#666" />
